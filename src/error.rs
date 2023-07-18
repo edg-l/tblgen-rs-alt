@@ -6,6 +6,10 @@ pub enum TableGenError {
     CreateStruct(String),
     #[error("pointer is null")]
     NullPointer,
+    #[error("invalid bit range")]
+    InvalidBitRange,
+    #[error("interior null byte in string")]
+    StringNulError(#[from] std::ffi::NulError),
     #[error("unknown TableGen error")]
     Unknown,
 }

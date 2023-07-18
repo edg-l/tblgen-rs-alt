@@ -2,6 +2,7 @@ pub mod error;
 pub mod record;
 pub mod record_keeper;
 pub mod record_map;
+pub mod value;
 
 use std::ffi::{c_char, CString};
 
