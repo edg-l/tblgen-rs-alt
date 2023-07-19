@@ -2,9 +2,10 @@ use std::ffi::CString;
 
 use crate::{record::Record, record_map::RecordMap};
 use tablegen_sys::{
-    tableGenRecordItrFree, tableGenRecordItrNext, tableGenRecordKeeperGetAllDerivedDefinitions,
-    tableGenRecordKeeperGetClass, tableGenRecordKeeperGetClasses, tableGenRecordKeeperGetDef,
-    tableGenRecordKeeperGetDefs, TableGenRecordItrRef, TableGenRecordKeeperRef,
+    tableGenRecordKeeperGetAllDerivedDefinitions, tableGenRecordKeeperGetClass,
+    tableGenRecordKeeperGetClasses, tableGenRecordKeeperGetDef, tableGenRecordKeeperGetDefs,
+    tableGenRecordVectorFree, tableGenRecordVectorGet, TableGenRecordKeeperRef,
+    TableGenRecordVectorRef,
 };
 
 pub struct RecordKeeper {
@@ -51,7 +52,7 @@ impl RecordKeeper {
     pub fn get_all_derived_definitions(&self, name: &str) -> RecordIterator {
         let name = CString::new(name).unwrap();
         unsafe {
-            RecordIterator::from_raw(tableGenRecordKeeperGetAllDerivedDefinitions(
+            RecordIterator::from_raw_vector(tableGenRecordKeeperGetAllDerivedDefinitions(
                 self.raw,
                 name.as_ptr(),
             ))
@@ -60,12 +61,13 @@ impl RecordKeeper {
 }
 
 pub struct RecordIterator {
-    raw: TableGenRecordItrRef,
+    raw: TableGenRecordVectorRef,
+    index: usize,
 }
 
 impl RecordIterator {
-    unsafe fn from_raw(ptr: TableGenRecordItrRef) -> RecordIterator {
-        RecordIterator { raw: ptr }
+    unsafe fn from_raw_vector(ptr: TableGenRecordVectorRef) -> RecordIterator {
+        RecordIterator { raw: ptr, index: 0 }
     }
 }
 
@@ -73,7 +75,8 @@ impl Iterator for RecordIterator {
     type Item = Record;
 
     fn next(&mut self) -> Option<Record> {
-        let next = unsafe { tableGenRecordItrNext(self.raw) };
+        let next = unsafe { tableGenRecordVectorGet(self.raw, self.index) };
+        self.index += 1;
         if next.is_null() {
             None
         } else {
@@ -84,6 +87,6 @@ impl Iterator for RecordIterator {
 
 impl Drop for RecordIterator {
     fn drop(&mut self) {
-        unsafe { tableGenRecordItrFree(self.raw) }
+        unsafe { tableGenRecordVectorFree(self.raw) }
     }
 }

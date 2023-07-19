@@ -1,9 +1,13 @@
 use tablegen_sys::{
-    tableGenDagItrFree, tableGenListRecordGetValues, TableGenListItr, TableGenListItrRef,
-    TableGenRecordValRef,
+    tableGenBitArrayFree, tableGenBitInitGetValue, tableGenBitsInitGetValue, tableGenDagRecordGet,
+    tableGenInitRecType, tableGenIntInitGetValue, tableGenRecordInitGetValue,
+    tableGenStringInitGetValueNewString, TableGenTypedInitRef,
 };
 
-use crate::record::Record;
+use crate::{
+    error::{self, TableGenError},
+    record::Record,
+};
 use std::ffi::CStr;
 
 #[derive(Debug)]
@@ -19,72 +23,106 @@ pub enum TypedValue {
     Invalid,
 }
 
+impl TypedValue {
+    pub unsafe fn from_typed_init(init: TableGenTypedInitRef) -> error::Result<Self> {
+        let t = tableGenInitRecType(init);
+
+        use tablegen_sys::TableGenRecTyKind::*;
+        match t {
+            TableGenBitRecTyKind => {
+                let mut bit = -1;
+                tableGenBitInitGetValue(init, &mut bit);
+
+                if bit == 0 || bit == 1 {
+                    Ok(TypedValue::Bit(bit))
+                } else {
+                    Err(TableGenError::InvalidBitRange)
+                }
+            }
+            TableGenBitsRecTyKind => {
+                let mut bits: Vec<_> = Vec::new();
+                let mut len: usize = 0;
+                let cbits = tableGenBitsInitGetValue(init, &mut len);
+                let mut bits_ptr = cbits;
+                for _ in 0..len {
+                    bits.push(*bits_ptr);
+                    bits_ptr = bits_ptr.offset(1);
+                }
+                tableGenBitArrayFree(cbits);
+                if bits.is_empty() {
+                    Err(TableGenError::NullPointer.into())
+                } else {
+                    Ok(TypedValue::Bits(bits))
+                }
+            }
+            TableGenDagRecTyKind => Ok(TypedValue::Dag(DagValue::from_raw(init))),
+            TableGenIntRecTyKind => {
+                let mut int: i64 = 0;
+                tableGenIntInitGetValue(init, &mut int);
+                Ok(TypedValue::Int(int))
+            }
+            TableGenListRecTyKind => Ok(TypedValue::List(ListValue::from_ptr(init))),
+            TableGenRecordRecTyKind => Ok(TypedValue::Record(Record::from_raw(
+                tableGenRecordInitGetValue(init),
+            ))),
+            TableGenStringRecTyKind => {
+                let cstr = tableGenStringInitGetValueNewString(init);
+                Ok(TypedValue::String(
+                    CStr::from_ptr(cstr).to_string_lossy().into_owned(),
+                ))
+            }
+            _ => Ok(Self::Invalid),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct DagValue {
-    dag_ptr: TableGenRecordValRef,
+    raw: TableGenTypedInitRef,
 }
 
 impl DagValue {
-    pub fn from_ptr(val: TableGenRecordValRef) -> DagValue {
-        DagValue { dag_ptr: val }
+    pub fn from_raw(val: TableGenTypedInitRef) -> DagValue {
+        DagValue { raw: val }
     }
 
-    // pub fn values_iter(&self) -> Result<DagIterator> {
-    //     tg_ffi!(TGDagRecordGetValues, self.dag_ptr, DagIterator::from_ptr)
-    // }
+    pub fn values_iter(&self) -> DagIterator {
+        DagIterator::from_raw(self.raw)
+    }
 }
 
-// pub struct DagIterator {
-//     iter: *const CDagIterator,
-// }
+pub struct DagIterator {
+    raw: TableGenTypedInitRef,
+    index: usize,
+}
 
-// impl DagIterator {
-//     fn from_ptr(di: *const CDagIterator) -> DagIterator {
-//         DagIterator { iter: di }
-//     }
-// }
+impl DagIterator {
+    fn from_raw(raw: TableGenTypedInitRef) -> DagIterator {
+        DagIterator { raw, index: 0 }
+    }
+}
 
-// impl Iterator for DagIterator {
-//     type Item = (String, TypedValue);
+impl Iterator for DagIterator {
+    type Item = TypedValue;
 
-//     fn next(&mut self) -> Option<(String, TypedValue)> {
-//         let dp_ref = unsafe { TGDagItrNextPair(self.iter) };
-//         let ti: Result<TypedInit> = tg_ffi!(TGDagPairGetValue, dp_ref, TypedInit::from_ptr);
-
-//         let dp = unsafe {
-//             let name_ptr = TGDagPairGetKey(dp_ref);
-//             let name = {
-//                 if name_ptr.is_null() {
-//                     None
-//                 } else {
-//                     Some(CStr::from_ptr(name_ptr).to_string_lossy().into_owned())
-//                 }
-//             };
-//             (name, ti)
-//         };
-
-//         match dp {
-//             (None, Err(_)) => None,
-//             (Some(x), Err(_)) => Some((x, TypedValue::Invalid)),
-//             (None, Ok(x)) => Some((String::from(""), x.to_typed_value())),
-//             (Some(x), Ok(y)) => Some((x, y.to_typed_value())),
-//         }
-//     }
-// }
-
-// impl Drop for DagIterator {
-//     fn drop(&mut self) {
-//         unsafe { tableGenDagItrFree(self.iter) }
-//     }
-// }
+    fn next(&mut self) -> Option<TypedValue> {
+        let next = unsafe { tableGenDagRecordGet(self.raw, self.index) };
+        self.index += 1;
+        if !next.is_null() {
+            unsafe { TypedValue::from_typed_init(next).ok() }
+        } else {
+            None
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct ListValue {
-    raw: TableGenRecordValRef,
+    raw: TableGenTypedInitRef,
 }
 
 impl ListValue {
-    pub fn from_ptr(val: TableGenRecordValRef) -> ListValue {
+    pub fn from_ptr(val: TableGenTypedInitRef) -> ListValue {
         ListValue { raw: val }
     }
 
