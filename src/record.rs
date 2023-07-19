@@ -1,21 +1,26 @@
+// Original work Copyright 2016 Alexander Stocko <as@coder.gg>.
+// Modified work Copyright 2023 Daan Vanoverloop
+// See the COPYRIGHT file at the top-level directory of this distribution.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
 use std::{
     ffi::{c_uint, CStr, CString},
     ops::Deref,
 };
 
 use tablegen_sys::{
-    tableGenBitArrayFree, tableGenRecordAsNewString, tableGenRecordGetFieldType,
-    tableGenRecordGetFirstValue, tableGenRecordGetName, tableGenRecordGetValue,
-    tableGenRecordIsAnonymous, tableGenRecordValGetName, tableGenRecordValGetType,
-    tableGenRecordValGetValAsBit, tableGenRecordValGetValAsBits, tableGenRecordValGetValAsInt,
-    tableGenRecordValGetValAsNewString, tableGenRecordValGetValue, tableGenRecordValNext,
-    TableGenRecordRef, TableGenRecordValRef,
+    tableGenRecordAsNewString, tableGenRecordGetFieldType, tableGenRecordGetFirstValue,
+    tableGenRecordGetName, tableGenRecordGetValue, tableGenRecordIsAnonymous,
+    tableGenRecordValGetName, tableGenRecordValGetValue, tableGenRecordValNext, TableGenRecordRef,
+    TableGenRecordValRef,
 };
 
-use crate::{
-    error::{self, TableGenError},
-    value::{DagValue, ListValue, TypedValue},
-};
+use crate::{error, value::TypedValue};
 
 #[derive(Debug)]
 pub struct Record {
@@ -62,6 +67,7 @@ impl Record {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct RecordValue {
     raw: TableGenRecordValRef,
