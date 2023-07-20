@@ -36,7 +36,7 @@ pub enum TypedValue {
 }
 
 macro_rules! as_into_fns {
-    ($name:ident, $variant:ident, $type:ident) => {
+    ($name:ident, $variant:ident, $type:ty) => {
         paste! {
             pub fn [<as_ $name>](&self) -> Option<&$type> {
                 if let Self::$variant(v) = self {
@@ -58,9 +58,14 @@ macro_rules! as_into_fns {
 }
 
 impl TypedValue {
+    as_into_fns!(bit, Bit, i8);
+    as_into_fns!(bits, Bits, Vec<i8>);
+    as_into_fns!(code, Code, String);
+    as_into_fns!(int, Int, i64);
     as_into_fns!(string, String, String);
-    as_into_fns!(def, Record, Record);
+    as_into_fns!(list, List, ListValue);
     as_into_fns!(dag, Dag, DagValue);
+    as_into_fns!(def, Record, Record);
 
     #[allow(non_upper_case_globals)]
     pub unsafe fn from_typed_init(init: TableGenTypedInitRef) -> error::Result<Self> {

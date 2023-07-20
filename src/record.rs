@@ -23,7 +23,7 @@ use tablegen_sys::{
 
 use crate::{
     error,
-    value::{DagValue, TypedValue},
+    value::{DagValue, ListValue, TypedValue},
 };
 
 #[derive(Debug)]
@@ -32,7 +32,7 @@ pub struct Record {
 }
 
 macro_rules! value_fn {
-    ($name:ident, $type:ident) => {
+    ($name:ident, $type:ty) => {
         paste! {
             pub fn [<$name _value>](&self, name: &str) -> Option<$type> {
                 self.value(name).ok()?.into_inner().[<into_ $name>]()
@@ -62,9 +62,14 @@ impl Record {
         }
     }
 
+    value_fn!(bit, i8);
+    value_fn!(bits, Vec<i8>);
+    value_fn!(code, String);
+    value_fn!(int, i64);
     value_fn!(string, String);
-    value_fn!(def, Record);
+    value_fn!(list, ListValue);
     value_fn!(dag, DagValue);
+    value_fn!(def, Record);
 
     pub fn value(&self, name: &str) -> error::Result<RecordValue> {
         let name = CString::new(name)?;
