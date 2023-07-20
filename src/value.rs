@@ -164,12 +164,17 @@ impl<'d> DagIterator<'d> {
 }
 
 impl<'d> Iterator for DagIterator<'d> {
-    type Item = TypedValue;
+    type Item = (String, TypedValue);
 
-    fn next(&mut self) -> Option<TypedValue> {
+    fn next(&mut self) -> Option<Self::Item> {
         let next = self.dag.get(self.index);
+        let name = self.dag.get_name(self.index);
         self.index += 1;
-        next
+        if next.is_some() && name.is_some() {
+            Some((name.unwrap(), next.unwrap()))
+        } else {
+            None
+        }
     }
 }
 
