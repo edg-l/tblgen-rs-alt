@@ -9,3 +9,4 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 tablegen-sys = { path = "../tablegen-sys" }
 thiserror = "1"
+paste = "1"

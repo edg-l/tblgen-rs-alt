@@ -8,6 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use paste::paste;
 use std::{
     ffi::{c_uint, CStr, CString},
     ops::Deref,
@@ -16,15 +17,28 @@ use std::{
 use tablegen_sys::{
     tableGenRecordAsNewString, tableGenRecordGetFieldType, tableGenRecordGetFirstValue,
     tableGenRecordGetName, tableGenRecordGetValue, tableGenRecordIsAnonymous,
-    tableGenRecordValGetName, tableGenRecordValGetValue, tableGenRecordValNext, TableGenRecordRef,
-    TableGenRecordValRef,
+    tableGenRecordIsSubclassOf, tableGenRecordValGetName, tableGenRecordValGetValue,
+    tableGenRecordValNext, TableGenRecordRef, TableGenRecordValRef,
 };
 
-use crate::{error, value::TypedValue};
+use crate::{
+    error,
+    value::{DagValue, TypedValue},
+};
 
 #[derive(Debug)]
 pub struct Record {
     raw: TableGenRecordRef,
+}
+
+macro_rules! value_fn {
+    ($name:ident, $type:ident) => {
+        paste! {
+            pub fn [<$name _value>](&self, name: &str) -> Option<$type> {
+                self.value(name).ok()?.into_inner().[<into_ $name>]()
+            }
+        }
+    };
 }
 
 impl Record {
@@ -48,6 +62,10 @@ impl Record {
         }
     }
 
+    value_fn!(string, String);
+    value_fn!(def, Record);
+    value_fn!(dag, DagValue);
+
     pub fn value(&self, name: &str) -> error::Result<RecordValue> {
         let name = CString::new(name)?;
         unsafe { RecordValue::from_raw(tableGenRecordGetValue(self.raw, name.as_ptr())) }
@@ -60,6 +78,11 @@ impl Record {
 
     pub fn anonymous(&self) -> bool {
         unsafe { tableGenRecordIsAnonymous(self.raw) > 0 }
+    }
+
+    pub fn subclass_of(&self, class: &str) -> bool {
+        let name = CString::new(class).unwrap();
+        unsafe { tableGenRecordIsSubclassOf(self.raw, name.as_ptr()) > 0 }
     }
 
     pub fn values_iter(&self) -> RecordValueIterator {
@@ -82,6 +105,10 @@ impl RecordValue {
 
     pub fn value(&self) -> &TypedValue {
         &self.value
+    }
+
+    pub fn into_inner(self) -> TypedValue {
+        self.value
     }
 
     pub unsafe fn from_raw(ptr: TableGenRecordValRef) -> error::Result<Self> {

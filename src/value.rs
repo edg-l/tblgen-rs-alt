@@ -8,8 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use paste::paste;
 use tablegen_sys::{
-    tableGenBitArrayFree, tableGenBitInitGetValue, tableGenBitsInitGetValue, tableGenDagRecordGet,
+    tableGenBitArrayFree, tableGenBitInitGetValue, tableGenBitsInitGetValue,
+    tableGenDagRecordArgName, tableGenDagRecordGet, tableGenDagRecordNumArgs,
     tableGenDefInitGetValue, tableGenInitRecType, tableGenIntInitGetValue, tableGenListRecordGet,
     tableGenStringInitGetValueNewString, TableGenTypedInitRef,
 };
@@ -33,7 +35,33 @@ pub enum TypedValue {
     Invalid,
 }
 
+macro_rules! as_into_fns {
+    ($name:ident, $variant:ident, $type:ident) => {
+        paste! {
+            pub fn [<as_ $name>](&self) -> Option<&$type> {
+                if let Self::$variant(v) = self {
+                    Some(&v)
+                } else {
+                    None
+                }
+            }
+
+            pub fn [<into_ $name>](self) -> Option<$type> {
+                if let Self::$variant(v) = self {
+                    Some(v)
+                } else {
+                    None
+                }
+            }
+        }
+    };
+}
+
 impl TypedValue {
+    as_into_fns!(string, String, String);
+    as_into_fns!(def, Record, Record);
+    as_into_fns!(dag, Dag, DagValue);
+
     #[allow(non_upper_case_globals)]
     pub unsafe fn from_typed_init(init: TableGenTypedInitRef) -> error::Result<Self> {
         let t = tableGenInitRecType(init);
@@ -98,32 +126,50 @@ impl DagValue {
     }
 
     pub fn values_iter(&self) -> DagIterator {
-        DagIterator::from_raw(self.raw)
+        DagIterator::from_dag(self)
     }
-}
 
-pub struct DagIterator {
-    raw: TableGenTypedInitRef,
-    index: usize,
-}
-
-impl DagIterator {
-    fn from_raw(raw: TableGenTypedInitRef) -> DagIterator {
-        DagIterator { raw, index: 0 }
+    pub fn num_args(&self) -> usize {
+        unsafe { tableGenDagRecordNumArgs(self.raw) }
     }
-}
 
-impl Iterator for DagIterator {
-    type Item = TypedValue;
-
-    fn next(&mut self) -> Option<TypedValue> {
-        let next = unsafe { tableGenDagRecordGet(self.raw, self.index) };
-        self.index += 1;
-        if !next.is_null() {
-            unsafe { TypedValue::from_typed_init(next).ok() }
+    pub fn get_name(&self, index: usize) -> Option<String> {
+        let value = unsafe { tableGenDagRecordArgName(self.raw, index) };
+        if !value.is_null() {
+            Some(unsafe { CStr::from_ptr(value).to_string_lossy().into_owned() })
         } else {
             None
         }
+    }
+
+    pub fn get(&self, index: usize) -> Option<TypedValue> {
+        let value = unsafe { tableGenDagRecordGet(self.raw, index) };
+        if !value.is_null() {
+            unsafe { TypedValue::from_typed_init(value).ok() }
+        } else {
+            None
+        }
+    }
+}
+
+pub struct DagIterator<'d> {
+    dag: &'d DagValue,
+    index: usize,
+}
+
+impl<'d> DagIterator<'d> {
+    fn from_dag(dag: &'d DagValue) -> DagIterator<'d> {
+        DagIterator { dag, index: 0 }
+    }
+}
+
+impl<'d> Iterator for DagIterator<'d> {
+    type Item = TypedValue;
+
+    fn next(&mut self) -> Option<TypedValue> {
+        let next = self.dag.get(self.index);
+        self.index += 1;
+        next
     }
 }
 
