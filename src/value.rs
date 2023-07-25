@@ -157,6 +157,7 @@ impl DagValue {
     }
 }
 
+#[derive(Clone)]
 pub struct DagIterator<'d> {
     dag: &'d DagValue,
     index: usize,
@@ -198,6 +199,7 @@ impl ListValue {
     }
 }
 
+#[derive(Clone)]
 pub struct ListIterator {
     raw: TableGenTypedInitRef,
     index: usize,
