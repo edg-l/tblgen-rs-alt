@@ -8,31 +8,49 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
+use std::marker::PhantomData;
 
 use crate::raw::{
     tableGenRecordKeeperGetAllDerivedDefinitions, tableGenRecordKeeperGetClass,
-    tableGenRecordKeeperGetClasses, tableGenRecordKeeperGetDef, tableGenRecordKeeperGetDefs,
-    tableGenRecordVectorFree, tableGenRecordVectorGet, TableGenRecordKeeperRef,
+    tableGenRecordKeeperGetDef, tableGenRecordKeeperGetFirstClass, tableGenRecordKeeperGetFirstDef,
+    tableGenRecordKeeperGetNextClass, tableGenRecordKeeperGetNextDef,
+    tableGenRecordKeeperItemGetName, tableGenRecordKeeperItemGetRecord, tableGenRecordVectorFree,
+    tableGenRecordVectorGet, TableGenRecordKeeperItemRef, TableGenRecordKeeperRef,
     TableGenRecordVectorRef,
 };
-use crate::{record::Record, record_map::RecordMap};
+use crate::record::Record;
+use crate::TableGen;
 
-pub struct RecordKeeper {
+pub struct RecordKeeperRef<'a> {
     raw: TableGenRecordKeeperRef,
+    _reference: PhantomData<&'a TableGen>,
 }
 
-impl RecordKeeper {
-    pub unsafe fn from_raw(ptr: TableGenRecordKeeperRef) -> RecordKeeper {
-        RecordKeeper { raw: ptr }
+impl<'a> RecordKeeperRef<'a> {
+    pub unsafe fn from_raw(ptr: TableGenRecordKeeperRef) -> RecordKeeperRef<'a> {
+        RecordKeeperRef {
+            raw: ptr,
+            _reference: PhantomData,
+        }
     }
 
-    pub fn classes(&self) -> RecordMap {
-        RecordMap::from_raw(unsafe { tableGenRecordKeeperGetClasses(self.raw) })
+    pub fn classes(&self) -> NamedRecordIterator {
+        unsafe {
+            NamedRecordIterator::from_raw(
+                tableGenRecordKeeperGetFirstClass(self.raw),
+                RecordIteratorKind::Class,
+            )
+        }
     }
 
-    pub fn defs(&self) -> RecordMap {
-        RecordMap::from_raw(unsafe { tableGenRecordKeeperGetDefs(self.raw) })
+    pub fn defs(&self) -> NamedRecordIterator {
+        unsafe {
+            NamedRecordIterator::from_raw(
+                tableGenRecordKeeperGetFirstDef(self.raw),
+                RecordIteratorKind::Def,
+            )
+        }
     }
 
     pub fn class(&self, name: &str) -> Option<Record> {
@@ -70,6 +88,52 @@ impl RecordKeeper {
     }
 }
 
+#[derive(Clone, Copy)]
+enum RecordIteratorKind {
+    Class,
+    Def,
+}
+
+pub struct NamedRecordIterator<'a> {
+    raw: TableGenRecordKeeperItemRef,
+    kind: RecordIteratorKind,
+    _reference: PhantomData<RecordKeeperRef<'a>>,
+}
+
+impl<'a> NamedRecordIterator<'a> {
+    unsafe fn from_raw(raw: TableGenRecordKeeperItemRef, kind: RecordIteratorKind) -> Self {
+        NamedRecordIterator {
+            raw,
+            kind,
+            _reference: PhantomData,
+        }
+    }
+}
+
+impl<'a> Iterator for NamedRecordIterator<'a> {
+    type Item = (String, Record);
+
+    fn next(&mut self) -> Option<(String, Record)> {
+        let current = if self.raw.is_null() {
+            return None;
+        } else {
+            unsafe {
+                Some((
+                    CStr::from_ptr(tableGenRecordKeeperItemGetName(self.raw))
+                        .to_string_lossy()
+                        .into_owned(),
+                    Record::from_raw(tableGenRecordKeeperItemGetRecord(self.raw)),
+                ))
+            }
+        };
+        self.raw = match self.kind {
+            RecordIteratorKind::Class => unsafe { tableGenRecordKeeperGetNextClass(self.raw) },
+            RecordIteratorKind::Def => unsafe { tableGenRecordKeeperGetNextDef(self.raw) },
+        };
+        current
+    }
+}
+
 pub struct RecordIterator {
     raw: TableGenRecordVectorRef,
     index: usize,
@@ -98,5 +162,69 @@ impl Iterator for RecordIterator {
 impl Drop for RecordIterator {
     fn drop(&mut self) {
         unsafe { tableGenRecordVectorFree(self.raw) }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::TableGen;
+
+    #[test]
+    fn classes_and_defs() {
+        let tablegen = TableGen::new(
+            r#"
+            class A;
+            class B;
+            class C;
+
+            def D1: A;
+            def D2: B;
+            def D3: C;
+        "#,
+            &[],
+        )
+        .expect("valid tablegen");
+        let rk = tablegen.record_keeper();
+        rk.classes().for_each(|i| assert!(i.1.name() == i.0));
+        rk.defs().for_each(|i| assert!(i.1.name() == i.0));
+        assert!(rk.classes().map(|i| i.0).eq(["A", "B", "C"]));
+        assert!(rk.defs().map(|i| i.0).eq(["D1", "D2", "D3"]));
+    }
+
+    #[test]
+    fn derived_defs() {
+        let tablegen = TableGen::new(
+            r#"
+            class A;
+            class B;
+            class C;
+
+            def D1: A;
+            def D2: A, B;
+            def D3: B, C;
+        "#,
+            &[],
+        )
+        .expect("valid tablegen");
+        let rk = tablegen.record_keeper();
+        let a = rk.all_derived_definitions("A");
+        assert!(a.map(|i| i.name()).eq(["D1", "D2"]));
+        let b = rk.all_derived_definitions("B");
+        assert!(b.map(|i| i.name()).eq(["D2", "D3"]));
+    }
+
+    #[test]
+    fn single() {
+        let tablegen = TableGen::new(
+            r#"
+            class A;
+            def D1;
+        "#,
+            &[],
+        )
+        .expect("valid tablegen");
+        let rk = tablegen.record_keeper();
+        assert_eq!(rk.class("A").expect("class exists").name(), "A");
+        assert_eq!(rk.def("D1").expect("def exists").name(), "D1");
     }
 }

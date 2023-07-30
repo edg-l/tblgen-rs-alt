@@ -11,22 +11,29 @@
 pub mod error;
 pub mod record;
 pub mod record_keeper;
-pub mod record_map;
+mod test;
 pub mod value;
 
+#[allow(non_upper_case_globals)]
+#[allow(non_camel_case_types)]
+#[allow(non_snake_case)]
 pub mod raw {
-    #![allow(non_upper_case_globals)]
-    #![allow(non_camel_case_types)]
-    #![allow(non_snake_case)]
-
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
-use std::ffi::{c_char, CString};
+use std::{
+    ffi::{c_char, CString},
+    sync::Mutex,
+};
 
 use error::{Result, TableGenError};
 use raw::{tableGenFree, tableGenGetRecordKeeper, tableGenInitialize, tableGenParse, TableGenRef};
-use record_keeper::RecordKeeper;
+use record_keeper::RecordKeeperRef;
+
+// TableGen only exposes `TableGenParseFile` in its API.
+// However, this function uses global state and therefore it is not thread safe.
+// Until they remove this hack, we have to deal with it ourselves.
+static TABLEGEN_PARSE_LOCK: Mutex<()> = Mutex::new(());
 
 pub struct TableGen {
     raw: TableGenRef,
@@ -46,19 +53,22 @@ impl TableGen {
             ))
         } else {
             unsafe {
-                if tableGenParse(tg) > 0 {
+                let guard = TABLEGEN_PARSE_LOCK.lock().unwrap();
+                let res = if tableGenParse(tg) > 0 {
                     Ok(TableGen { raw: tg })
                 } else {
                     Err(TableGenError::CreateStruct(
                         "Could not parse the source or its dependencies".into(),
                     ))
-                }
+                };
+                drop(guard);
+                res
             }
         }
     }
 
-    pub fn record_keeper(&self) -> RecordKeeper {
-        unsafe { RecordKeeper::from_raw(tableGenGetRecordKeeper(self.raw)) }
+    pub fn record_keeper(&self) -> RecordKeeperRef {
+        unsafe { RecordKeeperRef::from_raw(tableGenGetRecordKeeper(self.raw)) }
     }
 }
 

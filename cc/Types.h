@@ -21,6 +21,7 @@ typedef struct TableGen *TableGenRef;
 typedef struct TableGenRecordKeeper *TableGenRecordKeeperRef;
 
 typedef struct TableGenRecordMap *TableGenRecordMapRef;
+typedef struct TableGenRecordMapIterator *TableGenRecordKeeperItemRef;
 typedef struct TableGenRecordVector *TableGenRecordVectorRef;
 typedef struct TableGenRecordArray *TableGenRecordArrayRef;
 

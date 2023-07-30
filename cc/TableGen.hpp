@@ -65,4 +65,28 @@ DEFINE_SIMPLE_CONVERSION_FUNCTIONS(RecordVal, TableGenRecordValRef);
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(TypedInit, TableGenTypedInitRef);
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(ctablegen::DagPair, TableGenDagPairRef);
 
+// DEFINE_SIMPLE_CONVERSION_FUNCTIONS(ctablegen::RecordMap::const_iterator, TableGenRecordKeeperItemRef);
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(ctablegen::RecordMap::const_iterator, TableGenRecordKeeperItemRef);
+
+// inline ctablegen::RecordMap::value_type *
+// unwrap(TableGenRecordKeeperItemRef P) {
+//   return reinterpret_cast<ctablegen::RecordMap::value_type *>(P);
+// }
+
+// inline TableGenRecordKeeperItemRef
+// wrap(const ctablegen::RecordMap::value_type *P) {
+//   return reinterpret_cast<TableGenRecordKeeperItemRef>(
+//       const_cast<ctablegen::RecordMap::value_type *>(&*P));
+// }
+// inline ctablegen::RecordMap::const_iterator *
+// unwrap(TableGenRecordKeeperItemRef P) {
+//   return reinterpret_cast<ctablegen::RecordMap::const_iterator *>(P);
+// }
+
+// inline TableGenRecordKeeperItemRef
+// wrap(const ctablegen::RecordMap::const_iterator *P) {
+//   return reinterpret_cast<TableGenRecordKeeperItemRef>(
+//       const_cast<ctablegen::RecordMap::const_iterator *>(P));
+// }
+
 #endif

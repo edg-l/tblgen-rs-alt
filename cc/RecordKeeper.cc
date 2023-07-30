@@ -13,6 +13,45 @@
 
 using ctablegen::RecordMap;
 
+
+TableGenRecordKeeperItemRef
+tableGenRecordKeeperGetFirstClass(TableGenRecordKeeperRef rk_ref) {
+  return wrap(new RecordMap::const_iterator(unwrap(rk_ref)->getClasses().begin()));
+}
+
+TableGenRecordKeeperItemRef
+tableGenRecordKeeperGetFirstDef(TableGenRecordKeeperRef rk_ref) {
+  return wrap(new RecordMap::const_iterator(unwrap(rk_ref)->getDefs().begin()));
+}
+
+TableGenRecordKeeperItemRef
+tableGenRecordKeeperGetNextClass(TableGenRecordKeeperItemRef item) {
+  RecordMap::const_iterator *it = unwrap(item);
+  auto end = (*it)->second->getRecords().getClasses().end();
+  ++*it;
+  if (*it == end)
+    return nullptr;
+  return wrap(it);
+}
+
+TableGenRecordKeeperItemRef
+tableGenRecordKeeperGetNextDef(TableGenRecordKeeperItemRef item) {
+  RecordMap::const_iterator *it = unwrap(item);
+  auto end = (*it)->second->getRecords().getDefs().end();
+  ++*it;
+  if (*it == end)
+    return nullptr;
+  return wrap(it);
+}
+
+const char *tableGenRecordKeeperItemGetName(TableGenRecordKeeperItemRef item) {
+  return (*unwrap(item))->first.c_str();
+}
+
+TableGenRecordRef tableGenRecordKeeperItemGetRecord(TableGenRecordKeeperItemRef item) {
+  return wrap((*unwrap(item))->second.get());
+}
+
 TableGenRecordMapRef
 tableGenRecordKeeperGetClasses(TableGenRecordKeeperRef rk_ref) {
   return wrap(&unwrap(rk_ref)->getClasses());

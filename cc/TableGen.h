@@ -62,6 +62,21 @@ TableGenRecordRef tableGenRecordVectorGet(TableGenRecordVectorRef vec_ref,
                                           size_t index);
 void tableGenRecordVectorFree(TableGenRecordVectorRef vec_ref);
 
+TableGenRecordKeeperItemRef
+tableGenRecordKeeperGetFirstClass(TableGenRecordKeeperRef rk_ref);
+
+TableGenRecordKeeperItemRef
+tableGenRecordKeeperGetFirstDef(TableGenRecordKeeperRef rk_ref);
+
+TableGenRecordKeeperItemRef
+tableGenRecordKeeperGetNextClass(TableGenRecordKeeperItemRef item);
+TableGenRecordKeeperItemRef
+tableGenRecordKeeperGetNextDef(TableGenRecordKeeperItemRef item);
+
+const char *tableGenRecordKeeperItemGetName(TableGenRecordKeeperItemRef item);
+TableGenRecordRef
+tableGenRecordKeeperItemGetRecord(TableGenRecordKeeperItemRef item);
+
 // LLVM RecordMap
 TableGenRecordRef tableGenRecordMapGetFirst(TableGenRecordMapRef rm_ref);
 TableGenRecordRef tableGenRecordMapGet(TableGenRecordMapRef rm_ref,
@@ -77,7 +92,8 @@ TableGenRecordValRef tableGenRecordGetValue(TableGenRecordRef record_ref,
 TableGenRecTyKind tableGenRecordGetFieldType(TableGenRecordRef record_ref,
                                              const char *name);
 TableGenBool tableGenRecordIsAnonymous(TableGenRecordRef record_ref);
-TableGenBool tableGenRecordIsSubclassOf(TableGenRecordRef record_ref, const char *name);
+TableGenBool tableGenRecordIsSubclassOf(TableGenRecordRef record_ref,
+                                        const char *name);
 
 // LLVM RecordVal
 const char *tableGenRecordValGetName(TableGenRecordValRef rv_ref);
