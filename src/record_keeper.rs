@@ -16,7 +16,7 @@ use crate::raw::{
     tableGenRecordKeeperGetDef, tableGenRecordKeeperGetFirstClass, tableGenRecordKeeperGetFirstDef,
     tableGenRecordKeeperGetNextClass, tableGenRecordKeeperGetNextDef,
     tableGenRecordKeeperItemGetName, tableGenRecordKeeperItemGetRecord, tableGenRecordVectorFree,
-    tableGenRecordVectorGet, TableGenRecordKeeperItemRef, TableGenRecordKeeperRef,
+    tableGenRecordVectorGet, TableGenRecordKeeperIteratorRef, TableGenRecordKeeperRef,
     TableGenRecordVectorRef,
 };
 use crate::record::Record;
@@ -35,22 +35,12 @@ impl<'a> RecordKeeperRef<'a> {
         }
     }
 
-    pub fn classes(&self) -> NamedRecordIterator {
-        unsafe {
-            NamedRecordIterator::from_raw(
-                tableGenRecordKeeperGetFirstClass(self.raw),
-                RecordIteratorKind::Class,
-            )
-        }
+    pub fn classes(&self) -> NamedRecordIterator<'_, IsClass> {
+        unsafe { NamedRecordIterator::from_raw(tableGenRecordKeeperGetFirstClass(self.raw)) }
     }
 
-    pub fn defs(&self) -> NamedRecordIterator {
-        unsafe {
-            NamedRecordIterator::from_raw(
-                tableGenRecordKeeperGetFirstDef(self.raw),
-                RecordIteratorKind::Def,
-            )
-        }
+    pub fn defs(&self) -> NamedRecordIterator<'_, IsDef> {
+        unsafe { NamedRecordIterator::from_raw(tableGenRecordKeeperGetFirstDef(self.raw)) }
     }
 
     pub fn class(&self, name: &str) -> Option<Record> {
@@ -88,29 +78,42 @@ impl<'a> RecordKeeperRef<'a> {
     }
 }
 
-#[derive(Clone, Copy)]
-enum RecordIteratorKind {
-    Class,
-    Def,
+pub struct IsClass;
+pub struct IsDef;
+
+trait NextRecord {
+    unsafe fn next(raw: &mut TableGenRecordKeeperIteratorRef);
 }
 
-pub struct NamedRecordIterator<'a> {
-    raw: TableGenRecordKeeperItemRef,
-    kind: RecordIteratorKind,
+impl NextRecord for IsClass {
+    unsafe fn next(raw: &mut TableGenRecordKeeperIteratorRef) {
+        tableGenRecordKeeperGetNextClass(raw);
+    }
+}
+
+impl NextRecord for IsDef {
+    unsafe fn next(raw: &mut TableGenRecordKeeperIteratorRef) {
+        tableGenRecordKeeperGetNextDef(raw);
+    }
+}
+
+pub struct NamedRecordIterator<'a, T> {
+    raw: TableGenRecordKeeperIteratorRef,
+    _kind: PhantomData<T>,
     _reference: PhantomData<RecordKeeperRef<'a>>,
 }
 
-impl<'a> NamedRecordIterator<'a> {
-    unsafe fn from_raw(raw: TableGenRecordKeeperItemRef, kind: RecordIteratorKind) -> Self {
+impl<'a, T> NamedRecordIterator<'a, T> {
+    unsafe fn from_raw(raw: TableGenRecordKeeperIteratorRef) -> Self {
         NamedRecordIterator {
             raw,
-            kind,
+            _kind: PhantomData,
             _reference: PhantomData,
         }
     }
 }
 
-impl<'a> Iterator for NamedRecordIterator<'a> {
+impl<'a, T: NextRecord> Iterator for NamedRecordIterator<'a, T> {
     type Item = (String, Record);
 
     fn next(&mut self) -> Option<(String, Record)> {
@@ -126,10 +129,7 @@ impl<'a> Iterator for NamedRecordIterator<'a> {
                 ))
             }
         };
-        self.raw = match self.kind {
-            RecordIteratorKind::Class => unsafe { tableGenRecordKeeperGetNextClass(self.raw) },
-            RecordIteratorKind::Def => unsafe { tableGenRecordKeeperGetNextDef(self.raw) },
-        };
+        unsafe { T::next(&mut self.raw) };
         current
     }
 }

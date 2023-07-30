@@ -14,41 +14,39 @@
 using ctablegen::RecordMap;
 
 
-TableGenRecordKeeperItemRef
+TableGenRecordKeeperIteratorRef
 tableGenRecordKeeperGetFirstClass(TableGenRecordKeeperRef rk_ref) {
   return wrap(new RecordMap::const_iterator(unwrap(rk_ref)->getClasses().begin()));
 }
 
-TableGenRecordKeeperItemRef
+TableGenRecordKeeperIteratorRef
 tableGenRecordKeeperGetFirstDef(TableGenRecordKeeperRef rk_ref) {
   return wrap(new RecordMap::const_iterator(unwrap(rk_ref)->getDefs().begin()));
 }
 
-TableGenRecordKeeperItemRef
-tableGenRecordKeeperGetNextClass(TableGenRecordKeeperItemRef item) {
-  RecordMap::const_iterator *it = unwrap(item);
+void tableGenRecordKeeperGetNextClass(TableGenRecordKeeperIteratorRef *item) {
+  auto *it = unwrap(*item);
   auto end = (*it)->second->getRecords().getClasses().end();
-  ++*it;
-  if (*it == end)
-    return nullptr;
-  return wrap(it);
+  if (++*it == end) {
+    delete it;    
+    *item = nullptr;
+  }
 }
 
-TableGenRecordKeeperItemRef
-tableGenRecordKeeperGetNextDef(TableGenRecordKeeperItemRef item) {
-  RecordMap::const_iterator *it = unwrap(item);
+void tableGenRecordKeeperGetNextDef(TableGenRecordKeeperIteratorRef *item) {
+  auto *it = unwrap(*item);
   auto end = (*it)->second->getRecords().getDefs().end();
-  ++*it;
-  if (*it == end)
-    return nullptr;
-  return wrap(it);
+  if (++*it == end) {
+    delete it;    
+    *item = nullptr;
+  }
 }
 
-const char *tableGenRecordKeeperItemGetName(TableGenRecordKeeperItemRef item) {
+const char *tableGenRecordKeeperItemGetName(TableGenRecordKeeperIteratorRef item) {
   return (*unwrap(item))->first.c_str();
 }
 
-TableGenRecordRef tableGenRecordKeeperItemGetRecord(TableGenRecordKeeperItemRef item) {
+TableGenRecordRef tableGenRecordKeeperItemGetRecord(TableGenRecordKeeperIteratorRef item) {
   return wrap((*unwrap(item))->second.get());
 }
 

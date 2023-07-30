@@ -42,7 +42,8 @@ TableGenRef tableGenInitialize(const char *source, const size_t includes_sz,
 void tableGenFree(TableGenRef tg_ref);
 TableGenRecordKeeperRef tableGenGetRecordKeeper(TableGenRef tg_ref);
 
-// tableGenParser
+/// NOTE: TableGen currently relies on global state within a given parser
+///       invocation, so this function is not thread-safe.
 TableGenBool tableGenParse(TableGenRef tg_ref);
 
 // LLVM RecordKeeper
@@ -62,26 +63,18 @@ TableGenRecordRef tableGenRecordVectorGet(TableGenRecordVectorRef vec_ref,
                                           size_t index);
 void tableGenRecordVectorFree(TableGenRecordVectorRef vec_ref);
 
-TableGenRecordKeeperItemRef
+TableGenRecordKeeperIteratorRef
 tableGenRecordKeeperGetFirstClass(TableGenRecordKeeperRef rk_ref);
 
-TableGenRecordKeeperItemRef
+TableGenRecordKeeperIteratorRef
 tableGenRecordKeeperGetFirstDef(TableGenRecordKeeperRef rk_ref);
 
-TableGenRecordKeeperItemRef
-tableGenRecordKeeperGetNextClass(TableGenRecordKeeperItemRef item);
-TableGenRecordKeeperItemRef
-tableGenRecordKeeperGetNextDef(TableGenRecordKeeperItemRef item);
+void tableGenRecordKeeperGetNextClass(TableGenRecordKeeperIteratorRef *item);
+void tableGenRecordKeeperGetNextDef(TableGenRecordKeeperIteratorRef *item);
 
-const char *tableGenRecordKeeperItemGetName(TableGenRecordKeeperItemRef item);
+const char *tableGenRecordKeeperItemGetName(TableGenRecordKeeperIteratorRef item);
 TableGenRecordRef
-tableGenRecordKeeperItemGetRecord(TableGenRecordKeeperItemRef item);
-
-// LLVM RecordMap
-TableGenRecordRef tableGenRecordMapGetFirst(TableGenRecordMapRef rm_ref);
-TableGenRecordRef tableGenRecordMapGet(TableGenRecordMapRef rm_ref,
-                                       const char *name);
-const char **tableGenRecordMapGetKeys(TableGenRecordMapRef rm_ref, size_t *len);
+tableGenRecordKeeperItemGetRecord(TableGenRecordKeeperIteratorRef item);
 
 // LLVM Record
 TableGenRecordKeeperRef tableGenRecordGetRecords(TableGenRecordRef record_ref);
@@ -118,15 +111,12 @@ tableGenRecordValGetValAsDefRecord(TableGenRecordValRef rv_ref);
 TableGenRecTyKind tableGenListRecordGetType(TableGenRecordValRef rv_ref);
 TableGenTypedInitRef tableGenListRecordGet(TableGenTypedInitRef rv_ref,
                                            size_t index);
-const char *tableGenDagRecordArgName(TableGenTypedInitRef rv_ref, size_t index);
 
 // LLVM DagType
 TableGenTypedInitRef tableGenDagRecordGet(TableGenTypedInitRef rv_ref,
                                           size_t index);
+const char *tableGenDagRecordArgName(TableGenTypedInitRef rv_ref, size_t index);
 size_t tableGenDagRecordNumArgs(TableGenTypedInitRef rv_ref);
-
-char *tableGenDagPairGetKey(TableGenDagPairRef dp_ref);
-TableGenTypedInitRef tableGenDagPairGetValue(TableGenDagPairRef dp_ref);
 
 // Utility
 TableGenRecTyKind tableGenInitRecType(TableGenTypedInitRef ti);
@@ -140,7 +130,6 @@ TableGenRecordRef tableGenDefInitGetValue(TableGenTypedInitRef ti);
 void tableGenBitArrayFree(int8_t bit_array[]);
 void tableGenStringFree(const char *str);
 void tableGenStringArrayFree(const char **str_array);
-void tableGenDagPairFree(TableGenDagPairRef dp_ref);
 
 #ifdef __cplusplus
 }

@@ -65,21 +65,6 @@ TableGenRecTyKind tableGenListRecordGetType(TableGenRecordValRef rv_ref) {
   return TableGenInvalidRecTyKind;
 }
 
-// TableGenRecordValItrRef TableGenListRecordGetValues(TableGenRecordValRef
-// rv_ref) {
-//   CHECK_REF(rv_ref, nullptr);
-//   auto rv = AS_TYPE(RecordVal*, rv_ref);
-
-//   auto list = dyn_cast<ListInit>(rv);
-//   if (!list) return nullptr;
-
-//   auto cast_list = reinterpret_cast<ArrayRef<RecordVal*>>(list->getValues());
-
-//   auto listitr = new cTableGen::ArrayRefIterator<RecordVal>(cast_list);
-//   return AS_TYPE(TableGenRecordValItrRef, itr);
-// }
-
-// LLVM ListType
 TableGenTypedInitRef tableGenListRecordGet(TableGenTypedInitRef rv_ref,
                                            size_t index) {
   auto list = dyn_cast<ListInit>(unwrap(rv_ref));
@@ -124,25 +109,9 @@ const char *tableGenDagRecordArgName(TableGenTypedInitRef rv_ref,
   return dag->getArgNameStr(index).data();
 }
 
-// TableGenDagPairRef TableGenDagItrNextPair(TableGenDagItrRef di_ref) {
-//   CHECK_REF(di_ref, nullptr);
-//   auto dp = AS_TYPE(cTableGen::DagRefIterator*, di_ref)->NextPair();
-//   return AS_TYPE(TableGenDagPairRef, dp);
-// }
-
-char *tableGenDagPairGetKey(TableGenDagPairRef dp_ref) {
-  return const_cast<char *>(unwrap(dp_ref)->first.c_str());
-}
-
-TableGenTypedInitRef tableGenDagPairGetValue(TableGenDagPairRef dp_ref) {
-  return wrap(unwrap(dp_ref)->second);
-}
-
 // Memory
 void tableGenBitArrayFree(int8_t bit_array[]) { delete[] bit_array; }
 
 void tableGenStringFree(const char *str) { delete str; }
 
 void tableGenStringArrayFree(const char **str_array) { delete str_array; }
-
-void tableGenDagPairFree(TableGenDagPairRef dp_ref) { delete unwrap(dp_ref); }

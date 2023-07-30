@@ -65,9 +65,3 @@ TableGenBool tableGenRecordIsAnonymous(TableGenRecordRef record_ref) {
 TableGenBool tableGenRecordIsSubclassOf(TableGenRecordRef record_ref, const char *name) {
   return unwrap(record_ref)->isSubClassOf(StringRef(name));
 }
-
-// tablegenBool TableGenRecordIsResolveFirst(TableGenRecordRef record_ref) {
-//   CHECK_REF(record_ref, false);
-//   auto record = AS_TYPE(Record *, record_ref);
-//   return record->isResolveFirst();
-// }
