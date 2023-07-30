@@ -9,33 +9,27 @@
 // except according to those terms.
 
 use paste::paste;
-use std::{
-    ffi::{c_uint, CStr, CString},
-    ops::Deref,
-};
+use std::ffi::{CStr, CString};
 
 use crate::raw::{
-    tableGenRecordAsNewString, tableGenRecordGetFieldType, tableGenRecordGetFirstValue,
-    tableGenRecordGetName, tableGenRecordGetValue, tableGenRecordIsAnonymous,
-    tableGenRecordIsSubclassOf, tableGenRecordValGetName, tableGenRecordValGetValue,
-    tableGenRecordValNext, TableGenRecordRef, TableGenRecordValRef,
+    tableGenRecordGetFirstValue, tableGenRecordGetName, tableGenRecordGetValue,
+    tableGenRecordIsAnonymous, tableGenRecordIsSubclassOf, tableGenRecordValGetName,
+    tableGenRecordValGetValue, tableGenRecordValNext, TableGenRecordRef, TableGenRecordValRef,
 };
 
-use crate::{
-    error,
-    value::{DagValue, ListValue, TypedValue},
-};
+use crate::error::{self, TableGenError};
+use crate::init::{DagInit, ListInit, TypedInit};
 
 #[derive(Debug)]
 pub struct Record {
     raw: TableGenRecordRef,
 }
 
-macro_rules! value_fn {
+macro_rules! record_value {
     ($name:ident, $type:ty) => {
         paste! {
             pub fn [<$name _value>](&self, name: &str) -> Option<$type> {
-                self.value(name).ok()?.into_inner().[<into_ $name>]()
+                self.value(name).ok()?.try_into().ok()
             }
         }
     };
@@ -54,31 +48,18 @@ impl Record {
         }
     }
 
-    pub fn as_string(&self) -> String {
-        unsafe {
-            CStr::from_ptr(tableGenRecordAsNewString(self.raw))
-                .to_string_lossy()
-                .into_owned()
-        }
-    }
-
-    value_fn!(bit, i8);
-    value_fn!(bits, Vec<i8>);
-    value_fn!(code, String);
-    value_fn!(int, i64);
-    value_fn!(string, String);
-    value_fn!(list, ListValue);
-    value_fn!(dag, DagValue);
-    value_fn!(def, Record);
+    record_value!(bit, i8);
+    record_value!(bits, Vec<i8>);
+    record_value!(code, String);
+    record_value!(int, i64);
+    record_value!(string, String);
+    record_value!(list, ListInit);
+    record_value!(dag, DagInit);
+    record_value!(def, Record);
 
     pub fn value(&self, name: &str) -> error::Result<RecordValue> {
         let name = CString::new(name)?;
         unsafe { RecordValue::from_raw(tableGenRecordGetValue(self.raw, name.as_ptr())) }
-    }
-
-    pub fn field_type(&self, name: &str) -> RecordValueType {
-        let name = CString::new(name).unwrap();
-        unsafe { RecordValueType::from_raw(tableGenRecordGetFieldType(self.raw, name.as_ptr())) }
     }
 
     pub fn anonymous(&self) -> bool {
@@ -90,8 +71,44 @@ impl Record {
         unsafe { tableGenRecordIsSubclassOf(self.raw, name.as_ptr()) > 0 }
     }
 
-    pub fn values_iter(&self) -> RecordValueIterator {
-        RecordValueIterator::new(self)
+    pub fn values(&self) -> RecordValueIter {
+        RecordValueIter::new(self)
+    }
+}
+
+macro_rules! record_value_as {
+    ($name: ident, $type:ty) => {
+        paste! {
+            pub fn [<as_ $name>](&self) -> Option<&$type> {
+                self.value().[<as_ $name>]()
+            }
+        }
+    };
+}
+
+macro_rules! try_into {
+    ($type:ty) => {
+        impl TryFrom<RecordValue> for $type {
+            type Error = TableGenError;
+
+            fn try_from(record_value: RecordValue) -> Result<Self, Self::Error> {
+                record_value.value.try_into()
+            }
+        }
+    };
+}
+
+try_into!(i8);
+try_into!(Vec<i8>);
+try_into!(i64);
+try_into!(ListInit);
+try_into!(DagInit);
+try_into!(Record);
+try_into!(String);
+
+impl From<RecordValue> for TypedInit {
+    fn from(value: RecordValue) -> Self {
+        value.value
     }
 }
 
@@ -100,7 +117,7 @@ impl Record {
 pub struct RecordValue {
     raw: TableGenRecordValRef,
     name: String,
-    value: TypedValue,
+    value: TypedInit,
 }
 
 impl RecordValue {
@@ -108,19 +125,24 @@ impl RecordValue {
         &self.name
     }
 
-    pub fn value(&self) -> &TypedValue {
+    pub fn value(&self) -> &TypedInit {
         &self.value
     }
 
-    pub fn into_inner(self) -> TypedValue {
-        self.value
-    }
+    record_value_as!(bit, i8);
+    record_value_as!(bits, Vec<i8>);
+    record_value_as!(code, String);
+    record_value_as!(int, i64);
+    record_value_as!(string, String);
+    record_value_as!(list, ListInit);
+    record_value_as!(dag, DagInit);
+    record_value_as!(def, Record);
 
     pub unsafe fn from_raw(ptr: TableGenRecordValRef) -> error::Result<Self> {
         let name = CStr::from_ptr(tableGenRecordValGetName(ptr))
             .to_string_lossy()
             .into_owned();
-        let value = TypedValue::from_typed_init(tableGenRecordValGetValue(ptr))?;
+        let value = TypedInit::from_raw(tableGenRecordValGetValue(ptr))?;
         Ok(Self {
             raw: ptr,
             name,
@@ -129,43 +151,15 @@ impl RecordValue {
     }
 }
 
-impl Deref for RecordValue {
-    type Target = TypedValue;
-
-    fn deref(&self) -> &Self::Target {
-        &self.value
-    }
-}
-
-#[derive(Debug, PartialEq, PartialOrd)]
-#[repr(C)]
-pub enum RecordValueType {
-    Bit,
-    Bits,
-    Code,
-    Int,
-    String,
-    List,
-    Dag,
-    Record,
-    Invalid,
-}
-
-impl RecordValueType {
-    unsafe fn from_raw(raw: c_uint) -> Self {
-        std::mem::transmute(raw)
-    }
-}
-
-pub struct RecordValueIterator {
+pub struct RecordValueIter {
     record: TableGenRecordRef,
     current: TableGenRecordValRef,
 }
 
-impl RecordValueIterator {
-    fn new(record: &Record) -> RecordValueIterator {
+impl RecordValueIter {
+    fn new(record: &Record) -> RecordValueIter {
         unsafe {
-            RecordValueIterator {
+            RecordValueIter {
                 record: record.raw,
                 current: tableGenRecordGetFirstValue(record.raw),
             }
@@ -173,7 +167,7 @@ impl RecordValueIterator {
     }
 }
 
-impl Iterator for RecordValueIterator {
+impl Iterator for RecordValueIter {
     type Item = RecordValue;
 
     fn next(&mut self) -> Option<RecordValue> {

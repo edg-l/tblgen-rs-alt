@@ -42,6 +42,15 @@ void tableGenRecordKeeperGetNextDef(TableGenRecordKeeperIteratorRef *item) {
   }
 }
 
+void tableGenRecordKeeperIteratorFree(TableGenRecordKeeperIteratorRef item) {
+  if (item)
+    delete unwrap(item);
+}
+
+TableGenRecordKeeperIteratorRef tableGenRecordKeeperIteratorClone(TableGenRecordKeeperIteratorRef item) {
+  return wrap(new RecordMap::const_iterator(*unwrap(item)));
+}
+
 const char *tableGenRecordKeeperItemGetName(TableGenRecordKeeperIteratorRef item) {
   return (*unwrap(item))->first.c_str();
 }

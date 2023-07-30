@@ -75,11 +75,12 @@ void tableGenRecordKeeperGetNextDef(TableGenRecordKeeperIteratorRef *item);
 const char *tableGenRecordKeeperItemGetName(TableGenRecordKeeperIteratorRef item);
 TableGenRecordRef
 tableGenRecordKeeperItemGetRecord(TableGenRecordKeeperIteratorRef item);
+void tableGenRecordKeeperIteratorFree(TableGenRecordKeeperIteratorRef item);
+TableGenRecordKeeperIteratorRef tableGenRecordKeeperIteratorClone(TableGenRecordKeeperIteratorRef item);
 
 // LLVM Record
 TableGenRecordKeeperRef tableGenRecordGetRecords(TableGenRecordRef record_ref);
 const char *tableGenRecordGetName(TableGenRecordRef record_ref);
-const char *tableGenRecordAsNewString(TableGenRecordRef record_ref);
 TableGenRecordValRef tableGenRecordGetValue(TableGenRecordRef record_ref,
                                             const char *name);
 TableGenRecTyKind tableGenRecordGetFieldType(TableGenRecordRef record_ref,
@@ -111,6 +112,7 @@ tableGenRecordValGetValAsDefRecord(TableGenRecordValRef rv_ref);
 TableGenRecTyKind tableGenListRecordGetType(TableGenRecordValRef rv_ref);
 TableGenTypedInitRef tableGenListRecordGet(TableGenTypedInitRef rv_ref,
                                            size_t index);
+size_t tableGenListRecordNumElements(TableGenTypedInitRef rv_ref);
 
 // LLVM DagType
 TableGenTypedInitRef tableGenDagRecordGet(TableGenTypedInitRef rv_ref,

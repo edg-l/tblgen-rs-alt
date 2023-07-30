@@ -15,13 +15,15 @@ use crate::raw::{
     tableGenRecordKeeperGetAllDerivedDefinitions, tableGenRecordKeeperGetClass,
     tableGenRecordKeeperGetDef, tableGenRecordKeeperGetFirstClass, tableGenRecordKeeperGetFirstDef,
     tableGenRecordKeeperGetNextClass, tableGenRecordKeeperGetNextDef,
-    tableGenRecordKeeperItemGetName, tableGenRecordKeeperItemGetRecord, tableGenRecordVectorFree,
+    tableGenRecordKeeperItemGetName, tableGenRecordKeeperItemGetRecord,
+    tableGenRecordKeeperIteratorClone, tableGenRecordKeeperIteratorFree, tableGenRecordVectorFree,
     tableGenRecordVectorGet, TableGenRecordKeeperIteratorRef, TableGenRecordKeeperRef,
     TableGenRecordVectorRef,
 };
 use crate::record::Record;
 use crate::TableGen;
 
+#[derive(Clone, Copy)]
 pub struct RecordKeeperRef<'a> {
     raw: TableGenRecordKeeperRef,
     _reference: PhantomData<&'a TableGen>,
@@ -35,12 +37,12 @@ impl<'a> RecordKeeperRef<'a> {
         }
     }
 
-    pub fn classes(&self) -> NamedRecordIterator<'_, IsClass> {
-        unsafe { NamedRecordIterator::from_raw(tableGenRecordKeeperGetFirstClass(self.raw)) }
+    pub fn classes(&self) -> NamedRecordIter<'_, IsClass> {
+        unsafe { NamedRecordIter::from_raw(tableGenRecordKeeperGetFirstClass(self.raw)) }
     }
 
-    pub fn defs(&self) -> NamedRecordIterator<'_, IsDef> {
-        unsafe { NamedRecordIterator::from_raw(tableGenRecordKeeperGetFirstDef(self.raw)) }
+    pub fn defs(&self) -> NamedRecordIter<'_, IsDef> {
+        unsafe { NamedRecordIter::from_raw(tableGenRecordKeeperGetFirstDef(self.raw)) }
     }
 
     pub fn class(&self, name: &str) -> Option<Record> {
@@ -67,10 +69,10 @@ impl<'a> RecordKeeperRef<'a> {
         }
     }
 
-    pub fn all_derived_definitions(&self, name: &str) -> RecordIterator {
+    pub fn all_derived_definitions(&self, name: &str) -> RecordIter {
         let name = CString::new(name).unwrap();
         unsafe {
-            RecordIterator::from_raw_vector(tableGenRecordKeeperGetAllDerivedDefinitions(
+            RecordIter::from_raw_vector(tableGenRecordKeeperGetAllDerivedDefinitions(
                 self.raw,
                 name.as_ptr(),
             ))
@@ -78,7 +80,9 @@ impl<'a> RecordKeeperRef<'a> {
     }
 }
 
+#[doc(hidden)]
 pub struct IsClass;
+#[doc(hidden)]
 pub struct IsDef;
 
 trait NextRecord {
@@ -97,15 +101,16 @@ impl NextRecord for IsDef {
     }
 }
 
-pub struct NamedRecordIterator<'a, T> {
+#[derive(Debug)]
+pub struct NamedRecordIter<'a, T> {
     raw: TableGenRecordKeeperIteratorRef,
     _kind: PhantomData<T>,
     _reference: PhantomData<RecordKeeperRef<'a>>,
 }
 
-impl<'a, T> NamedRecordIterator<'a, T> {
+impl<'a, T> NamedRecordIter<'a, T> {
     unsafe fn from_raw(raw: TableGenRecordKeeperIteratorRef) -> Self {
-        NamedRecordIterator {
+        NamedRecordIter {
             raw,
             _kind: PhantomData,
             _reference: PhantomData,
@@ -113,7 +118,7 @@ impl<'a, T> NamedRecordIterator<'a, T> {
     }
 }
 
-impl<'a, T: NextRecord> Iterator for NamedRecordIterator<'a, T> {
+impl<'a, T: NextRecord> Iterator for NamedRecordIter<'a, T> {
     type Item = (String, Record);
 
     fn next(&mut self) -> Option<(String, Record)> {
@@ -134,18 +139,30 @@ impl<'a, T: NextRecord> Iterator for NamedRecordIterator<'a, T> {
     }
 }
 
-pub struct RecordIterator {
+impl<'a, T> Clone for NamedRecordIter<'a, T> {
+    fn clone(&self) -> Self {
+        unsafe { Self::from_raw(tableGenRecordKeeperIteratorClone(self.raw)) }
+    }
+}
+
+impl<'a, T> Drop for NamedRecordIter<'a, T> {
+    fn drop(&mut self) {
+        unsafe { tableGenRecordKeeperIteratorFree(self.raw) }
+    }
+}
+
+pub struct RecordIter {
     raw: TableGenRecordVectorRef,
     index: usize,
 }
 
-impl RecordIterator {
-    unsafe fn from_raw_vector(ptr: TableGenRecordVectorRef) -> RecordIterator {
-        RecordIterator { raw: ptr, index: 0 }
+impl RecordIter {
+    unsafe fn from_raw_vector(ptr: TableGenRecordVectorRef) -> RecordIter {
+        RecordIter { raw: ptr, index: 0 }
     }
 }
 
-impl Iterator for RecordIterator {
+impl Iterator for RecordIter {
     type Item = Record;
 
     fn next(&mut self) -> Option<Record> {
@@ -159,7 +176,7 @@ impl Iterator for RecordIterator {
     }
 }
 
-impl Drop for RecordIterator {
+impl Drop for RecordIter {
     fn drop(&mut self) {
         unsafe { tableGenRecordVectorFree(self.raw) }
     }
@@ -167,7 +184,7 @@ impl Drop for RecordIterator {
 
 #[cfg(test)]
 mod test {
-    use crate::TableGen;
+    use super::*;
 
     #[test]
     fn classes_and_defs() {

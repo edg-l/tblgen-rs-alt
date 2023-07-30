@@ -9,10 +9,10 @@
 // except according to those terms.
 
 pub mod error;
+pub mod init;
 pub mod record;
 pub mod record_keeper;
 mod test;
-pub mod value;
 
 #[allow(non_upper_case_globals)]
 #[allow(non_camel_case_types)]
@@ -26,9 +26,13 @@ use std::{
     sync::Mutex,
 };
 
+pub use init::TypedInit;
+pub use record::Record;
+pub use record::RecordValue;
+pub use record_keeper::RecordKeeperRef;
+
 use error::{Result, TableGenError};
 use raw::{tableGenFree, tableGenGetRecordKeeper, tableGenInitialize, tableGenParse, TableGenRef};
-use record_keeper::RecordKeeperRef;
 
 // TableGen only exposes `TableGenParseFile` in its API.
 // However, this function uses global state and therefore it is not thread safe.

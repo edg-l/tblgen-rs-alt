@@ -65,6 +65,13 @@ TableGenRecTyKind tableGenListRecordGetType(TableGenRecordValRef rv_ref) {
   return TableGenInvalidRecTyKind;
 }
 
+size_t tableGenListRecordNumElements(TableGenTypedInitRef rv_ref) {
+  auto list = dyn_cast<ListInit>(unwrap(rv_ref));
+  if (!list)
+    return 0;
+  return list->size();
+}
+
 TableGenTypedInitRef tableGenListRecordGet(TableGenTypedInitRef rv_ref,
                                            size_t index) {
   auto list = dyn_cast<ListInit>(unwrap(rv_ref));

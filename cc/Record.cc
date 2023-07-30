@@ -21,17 +21,6 @@ const char *tableGenRecordGetName(TableGenRecordRef record_ref) {
   return unwrap(record_ref)->getName().data();
 }
 
-const char *tableGenRecordAsNewString(TableGenRecordRef record_ref) {
-  auto record = unwrap(record_ref);
-  auto name = record->getNameInitAsString();
-
-  auto sz = name.size() + 1;
-  auto str = new char[sz];
-  name.copy(str, name.size(), 0);
-  str[sz - 1] = '\0';
-  return str;
-}
-
 TableGenRecordValRef tableGenRecordGetValue(TableGenRecordRef record_ref,
                                             const char *name) {
   return wrap(unwrap(record_ref)->getValue(StringRef(name)));
