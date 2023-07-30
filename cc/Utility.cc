@@ -1,0 +1,109 @@
+// Original work Copyright 2016 Alexander Stocko <as@coder.gg>.
+// Modified work Copyright 2023 Daan Vanoverloop
+// See the COPYRIGHT file at the top-level directory of this distribution.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+#include "TableGen.h"
+#include "TableGen.hpp"
+
+namespace ctablegen {
+
+TableGenRecTyKind tableGenFromRecType(RecTy *rt) {
+  switch (rt->getRecTyKind()) {
+  case RecTy::BitRecTyKind:
+    return TableGenBitRecTyKind;
+  case RecTy::BitsRecTyKind:
+    return TableGenBitsRecTyKind;
+  case RecTy::IntRecTyKind:
+    return TableGenIntRecTyKind;
+  case RecTy::StringRecTyKind:
+    return TableGenStringRecTyKind;
+  case RecTy::ListRecTyKind:
+    return TableGenListRecTyKind;
+  case RecTy::DagRecTyKind:
+    return TableGenDagRecTyKind;
+  case RecTy::RecordRecTyKind:
+    return TableGenRecordRecTyKind;
+  default:
+    return TableGenInvalidRecTyKind;
+  }
+}
+
+} // namespace ctablegen
+
+TableGenRecTyKind tableGenInitRecType(TableGenTypedInitRef ti) {
+  if (!ti)
+    return TableGenInvalidRecTyKind;
+  auto typed_init = dyn_cast<TypedInit>(unwrap(ti));
+  if (!typed_init)
+    return TableGenInvalidRecTyKind;
+  return ctablegen::tableGenFromRecType(typed_init->getType());
+}
+
+TableGenBool tableGenBitInitGetValue(TableGenTypedInitRef ti, int8_t *bit) {
+  if (!ti)
+    return false;
+  auto bit_init = dyn_cast<BitInit>(unwrap(ti));
+  if (!bit_init)
+    return -1;
+  *bit = bit_init->getValue();
+  return true;
+}
+
+int8_t *tableGenBitsInitGetValue(TableGenTypedInitRef ti, size_t *len) {
+  if (!ti)
+    return nullptr;
+  auto bits_init = dyn_cast<BitsInit>(unwrap(ti));
+  if (!bits_init)
+    return nullptr;
+
+  *len = bits_init->getNumBits();
+  auto bits = new int8_t[*len];
+
+  for (size_t i = 0; i < *len; i++) {
+    bits[i] = reinterpret_cast<BitInit *>(bits_init->getBit(i))->getValue();
+  }
+
+  return bits;
+}
+
+TableGenBool tableGenIntInitGetValue(TableGenTypedInitRef ti,
+                                     int64_t *integer) {
+  if (!ti)
+    return false;
+  auto int_init = dyn_cast<IntInit>(unwrap(ti));
+  if (!int_init)
+    return false;
+
+  *integer = int_init->getValue();
+  return true;
+}
+
+char *tableGenStringInitGetValueNewString(TableGenTypedInitRef ti) {
+  if (!ti)
+    return nullptr;
+  auto str_init = dyn_cast<StringInit>(unwrap(ti));
+  if (!str_init)
+    return nullptr;
+
+  auto val = str_init->getValue();
+  auto sz = val.size();
+  auto str = new char[sz + 1];
+  std::copy(val.begin(), val.end(), str);
+  str[sz] = '\0';
+  return str;
+}
+
+TableGenRecordRef tableGenDefInitGetValue(TableGenTypedInitRef ti) {
+  if (!ti)
+    return nullptr;
+  auto def_init = dyn_cast<DefInit>(unwrap(ti));
+  if (!def_init)
+    return nullptr;
+  return wrap(def_init->getDef());
+}

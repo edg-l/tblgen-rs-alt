@@ -14,13 +14,19 @@ pub mod record_keeper;
 pub mod record_map;
 pub mod value;
 
+pub mod raw {
+    #![allow(non_upper_case_globals)]
+    #![allow(non_camel_case_types)]
+    #![allow(non_snake_case)]
+
+    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+}
+
 use std::ffi::{c_char, CString};
 
 use error::{Result, TableGenError};
+use raw::{tableGenFree, tableGenGetRecordKeeper, tableGenInitialize, tableGenParse, TableGenRef};
 use record_keeper::RecordKeeper;
-use tablegen_sys::{
-    tableGenFree, tableGenGetRecordKeeper, tableGenInitialize, tableGenParse, TableGenRef,
-};
 
 pub struct TableGen {
     raw: TableGenRef,

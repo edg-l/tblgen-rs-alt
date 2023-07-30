@@ -8,13 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use paste::paste;
-use tablegen_sys::{
+use crate::raw::{
     tableGenBitArrayFree, tableGenBitInitGetValue, tableGenBitsInitGetValue,
     tableGenDagRecordArgName, tableGenDagRecordGet, tableGenDagRecordNumArgs,
     tableGenDefInitGetValue, tableGenInitRecType, tableGenIntInitGetValue, tableGenListRecordGet,
-    tableGenStringInitGetValueNewString, TableGenTypedInitRef,
+    tableGenStringInitGetValueNewString, TableGenRecTyKind, TableGenTypedInitRef,
 };
+use paste::paste;
 
 use crate::{
     error::{self, TableGenError},
@@ -71,7 +71,7 @@ impl TypedValue {
     pub unsafe fn from_typed_init(init: TableGenTypedInitRef) -> error::Result<Self> {
         let t = tableGenInitRecType(init);
 
-        use tablegen_sys::TableGenRecTyKind::*;
+        use TableGenRecTyKind::*;
         match t {
             TableGenBitRecTyKind => {
                 let mut bit = -1;

@@ -14,7 +14,7 @@ use std::{
     ops::Deref,
 };
 
-use tablegen_sys::{
+use crate::raw::{
     tableGenRecordAsNewString, tableGenRecordGetFieldType, tableGenRecordGetFirstValue,
     tableGenRecordGetName, tableGenRecordGetValue, tableGenRecordIsAnonymous,
     tableGenRecordIsSubclassOf, tableGenRecordValGetName, tableGenRecordValGetValue,

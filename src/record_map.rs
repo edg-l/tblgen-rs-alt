@@ -11,9 +11,7 @@
 use std::ffi::CStr;
 use std::ffi::CString;
 
-use tablegen_sys::tableGenRecordMapGet;
-use tablegen_sys::tableGenRecordMapGetKeys;
-use tablegen_sys::TableGenRecordMapRef;
+use crate::raw::{tableGenRecordMapGet, tableGenRecordMapGetKeys, TableGenRecordMapRef};
 
 use crate::record::Record;
 

@@ -10,13 +10,13 @@
 
 use std::ffi::CString;
 
-use crate::{record::Record, record_map::RecordMap};
-use tablegen_sys::{
+use crate::raw::{
     tableGenRecordKeeperGetAllDerivedDefinitions, tableGenRecordKeeperGetClass,
     tableGenRecordKeeperGetClasses, tableGenRecordKeeperGetDef, tableGenRecordKeeperGetDefs,
     tableGenRecordVectorFree, tableGenRecordVectorGet, TableGenRecordKeeperRef,
     TableGenRecordVectorRef,
 };
+use crate::{record::Record, record_map::RecordMap};
 
 pub struct RecordKeeper {
     raw: TableGenRecordKeeperRef,
@@ -35,7 +35,7 @@ impl RecordKeeper {
         RecordMap::from_raw(unsafe { tableGenRecordKeeperGetDefs(self.raw) })
     }
 
-    pub fn get_class(&self, name: &str) -> Option<Record> {
+    pub fn class(&self, name: &str) -> Option<Record> {
         unsafe {
             let name = CString::new(name).ok()?;
             let class = tableGenRecordKeeperGetClass(self.raw, name.as_ptr());
@@ -47,7 +47,7 @@ impl RecordKeeper {
         }
     }
 
-    pub fn get_def(&self, name: &str) -> Option<Record> {
+    pub fn def(&self, name: &str) -> Option<Record> {
         unsafe {
             let name = CString::new(name).ok()?;
             let def = tableGenRecordKeeperGetDef(self.raw, name.as_ptr());
@@ -59,7 +59,7 @@ impl RecordKeeper {
         }
     }
 
-    pub fn get_all_derived_definitions(&self, name: &str) -> RecordIterator {
+    pub fn all_derived_definitions(&self, name: &str) -> RecordIterator {
         let name = CString::new(name).unwrap();
         unsafe {
             RecordIterator::from_raw_vector(tableGenRecordKeeperGetAllDerivedDefinitions(
