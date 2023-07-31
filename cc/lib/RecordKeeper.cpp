@@ -13,6 +13,9 @@
 
 using ctablegen::RecordMap;
 
+void tableGenRecordKeeperFree(TableGenRecordKeeperRef rk_ref) {
+  delete unwrap(rk_ref);
+}
 
 TableGenRecordKeeperIteratorRef
 tableGenRecordKeeperGetFirstClass(TableGenRecordKeeperRef rk_ref) {

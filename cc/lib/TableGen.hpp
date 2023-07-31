@@ -33,23 +33,24 @@ typedef std::map<std::string, std::unique_ptr<Record>, std::less<>> RecordMap;
 typedef std::vector<Record *> RecordVector;
 typedef std::pair<std::string, TypedInit *> DagPair;
 
-class TableGen {
+class TableGenParser {
 public:
-  TableGen(RecordKeeper *rk, SourceMgr *sm)
-      : record_keeper_(rk), source_mgr_(sm) {}
-  bool Parse() { return TableGenParseFile(*source_mgr_, *record_keeper_); }
-  inline RecordKeeper *record_keeper() const { return record_keeper_.get(); }
+  TableGenParser() {}
+  bool addSource(const StringRef source);
+  bool addSourceFile(const StringRef source);
+  void addIncludePath(const StringRef include);
+  RecordKeeper *parse();
 
 private:
-  std::unique_ptr<RecordKeeper> record_keeper_;
-  std::unique_ptr<SourceMgr> source_mgr_;
+  SourceMgr sourceMgr;
+  std::vector<std::string> includeDirs;
 };
 
 // Utility
 TableGenRecTyKind tableGenFromRecType(RecTy *rt);
 } // namespace ctablegen
 
-DEFINE_SIMPLE_CONVERSION_FUNCTIONS(ctablegen::TableGen, TableGenRef);
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(ctablegen::TableGenParser, TableGenParserRef);
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(RecordKeeper, TableGenRecordKeeperRef);
 
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(ctablegen::RecordMap, TableGenRecordMapRef);
@@ -65,7 +66,7 @@ DEFINE_SIMPLE_CONVERSION_FUNCTIONS(RecordVal, TableGenRecordValRef);
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(TypedInit, TableGenTypedInitRef);
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(ctablegen::DagPair, TableGenDagPairRef);
 
-DEFINE_SIMPLE_CONVERSION_FUNCTIONS(ctablegen::RecordMap::const_iterator, TableGenRecordKeeperIteratorRef);
-
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(ctablegen::RecordMap::const_iterator,
+                                   TableGenRecordKeeperIteratorRef);
 
 #endif

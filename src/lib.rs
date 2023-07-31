@@ -25,10 +25,52 @@
 //! This crate only aims to support the latest version of LLVM. The version of
 //! LLVM currently supported is 17.x.x.
 //!
-//! The `TABLEGEN_SYS_170_PREFIX` environment variable can be used to specify a
+//! The `TABLEGEN_170_PREFIX` environment variable can be used to specify a
 //! custom directory of the LLVM installation.
 //!
-//! # Note
+//! # Examples
+//!
+//! The following example parse simple TableGen code provided as a `&str` and
+//! iterates over classes and defs defined in this file.
+//!
+//! ```rust
+//! use tblgen::{TableGenParser, RecordKeeper};
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let keeper: RecordKeeper = TableGenParser::new()
+//!     .add_source(
+//!         r#"
+//!         class A;
+//!         def D: A;
+//!         "#,
+//!     )?
+//!     .parse()?;
+//! assert_eq!(keeper.classes().next().unwrap().0, "A");
+//! assert_eq!(keeper.defs().next().unwrap().0, "D");
+//! assert_eq!(keeper.all_derived_definitions("A").next().unwrap().name(), "D");
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! By adding include paths, external TableGen files can be included.
+//!
+//! ```rust
+//! use tblgen::{TableGenParser, RecordKeeper};
+//! use std::path::Path;
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let keeper: RecordKeeper = TableGenParser::new()
+//!     .add_source(r#"include "mlir/IR/OpBase.td""#)?
+//!     .add_include_path(&Path::new(&format!("{}/include", std::env::var("TABLEGEN_170_PREFIX")?)))?
+//!     .parse()?;
+//! let i32_def = keeper.def("I32").expect("has I32 def");
+//! assert!(i32_def.subclass_of("I"));
+//! assert_eq!(i32_def.int_value("bitwidth"), Some(32));
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # API Stability
 //!
 //! LLVM does not provide a stable C API for TableGen, and the C API provided by
 //! this crate is not stable. Furthermore, the safe wrapper does not provide a
@@ -53,63 +95,88 @@ pub mod raw {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
-use std::{
-    ffi::{c_char, CString},
-    sync::Mutex,
-};
+use std::{ffi::CString, path::Path, sync::Mutex};
 
 pub use init::TypedInit;
 pub use record::Record;
 pub use record::RecordValue;
-pub use record_keeper::RecordKeeperRef;
+pub use record_keeper::RecordKeeper;
 
 use error::{Result, TableGenError};
-use raw::{tableGenFree, tableGenGetRecordKeeper, tableGenInitialize, tableGenParse, TableGenRef};
+use raw::{
+    tableGenAddIncludePath, tableGenAddSource, tableGenAddSourceFile, tableGenFree, tableGenGet,
+    tableGenParse, TableGenParserRef,
+};
 
 // TableGen only exposes `TableGenParseFile` in its API.
 // However, this function uses global state and therefore it is not thread safe.
 // Until they remove this hack, we have to deal with it ourselves.
 static TABLEGEN_PARSE_LOCK: Mutex<()> = Mutex::new(());
 
-/// Main TableGen struct that manages and parses TableGen source files.
-pub struct TableGen {
-    raw: TableGenRef,
+/// Builder struct that parses TableGen source files and builds a
+/// [`RecordKeeper`].
+///
+/// [`RecordKeeper`]: record_keeper/struct.RecordKeeper.html
+pub struct TableGenParser {
+    raw: TableGenParserRef,
+    source_strings: Vec<CString>,
 }
 
-impl TableGen {
-    pub fn new(source: &str, includes: &[&str]) -> Result<TableGen> {
-        let source = CString::new(source).unwrap();
-        let cstrings: Vec<CString> = includes.iter().map(|&i| CString::new(i).unwrap()).collect();
-        let mut includes: Vec<*const c_char> = cstrings.iter().map(|i| i.as_ptr()).collect();
-        let tg =
-            unsafe { tableGenInitialize(source.as_ptr(), includes.len(), includes.as_mut_ptr()) };
-
-        if tg.is_null() {
-            Err(TableGenError::CreateStruct(
-                "Could not initialize a TableGen instance!".into(),
-            ))
-        } else {
-            unsafe {
-                let guard = TABLEGEN_PARSE_LOCK.lock().unwrap();
-                let res = if tableGenParse(tg) > 0 {
-                    Ok(TableGen { raw: tg })
-                } else {
-                    Err(TableGenError::CreateStruct(
-                        "Could not parse the source or its dependencies".into(),
-                    ))
-                };
-                drop(guard);
-                res
-            }
+impl TableGenParser {
+    pub fn new() -> Self {
+        Self {
+            raw: unsafe { tableGenGet() },
+            source_strings: Vec::new(),
         }
     }
 
-    pub fn record_keeper(&self) -> RecordKeeperRef {
-        unsafe { RecordKeeperRef::from_raw(tableGenGetRecordKeeper(self.raw)) }
+    pub fn add_include_path(&mut self, source: &Path) -> Result<&mut Self> {
+        if !source.exists() {
+            return Err(TableGenError::AddInclude);
+        }
+
+        let source = CString::new(source.to_str().ok_or(TableGenError::AddSource)?)?;
+        unsafe { tableGenAddIncludePath(self.raw, source.as_ptr()) }
+        Ok(self)
+    }
+
+    pub fn add_source_file(&mut self, source: &Path) -> Result<&mut Self> {
+        let source = CString::new(source.to_str().ok_or(TableGenError::AddSource)?)?;
+        if unsafe { tableGenAddSourceFile(self.raw, source.as_ptr()) > 0 } {
+            Ok(self)
+        } else {
+            Err(TableGenError::AddSource)
+        }
+    }
+
+    pub fn add_source(&mut self, source: &str) -> Result<&mut Self> {
+        let source = CString::new(source)?;
+        if unsafe { tableGenAddSource(self.raw, source.as_ptr()) > 0 } {
+            // Need to store source buffer until it is parsed,
+            // since tableGenAddSource doesn't copy the string.
+            self.source_strings.push(source);
+            Ok(self)
+        } else {
+            Err(TableGenError::AddSource)
+        }
+    }
+
+    pub fn parse(&self) -> Result<RecordKeeper> {
+        unsafe {
+            let guard = TABLEGEN_PARSE_LOCK.lock().unwrap();
+            let keeper = tableGenParse(self.raw);
+            let res = if !keeper.is_null() {
+                Ok(RecordKeeper::from_raw(keeper))
+            } else {
+                Err(TableGenError::Parse)
+            };
+            drop(guard);
+            res
+        }
     }
 }
 
-impl Drop for TableGen {
+impl Drop for TableGenParser {
     fn drop(&mut self) {
         unsafe {
             tableGenFree(self.raw);

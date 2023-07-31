@@ -37,16 +37,18 @@ typedef enum {
   TableGenInvalidRecTyKind
 } TableGenRecTyKind;
 
-TableGenRef tableGenInitialize(const char *source, const size_t includes_sz,
-                               const char *includes[]);
-void tableGenFree(TableGenRef tg_ref);
-TableGenRecordKeeperRef tableGenGetRecordKeeper(TableGenRef tg_ref);
+TableGenParserRef tableGenGet();
+void tableGenFree(TableGenParserRef tg_ref);
+TableGenBool tableGenAddSource(TableGenParserRef tg_ref, const char *source);
+TableGenBool tableGenAddSourceFile(TableGenParserRef tg_ref, const char *source);
+void tableGenAddIncludePath(TableGenParserRef tg_ref, const char *include);
 
 /// NOTE: TableGen currently relies on global state within a given parser
 ///       invocation, so this function is not thread-safe.
-TableGenBool tableGenParse(TableGenRef tg_ref);
+TableGenRecordKeeperRef tableGenParse(TableGenParserRef tg_ref);
 
 // LLVM RecordKeeper
+void tableGenRecordKeeperFree(TableGenRecordKeeperRef rk_ref);
 TableGenRecordMapRef
 tableGenRecordKeeperGetClasses(TableGenRecordKeeperRef rk_ref);
 TableGenRecordMapRef

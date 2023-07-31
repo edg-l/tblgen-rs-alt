@@ -12,29 +12,25 @@ use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
 
 use crate::raw::{
-    tableGenRecordKeeperGetAllDerivedDefinitions, tableGenRecordKeeperGetClass,
-    tableGenRecordKeeperGetDef, tableGenRecordKeeperGetFirstClass, tableGenRecordKeeperGetFirstDef,
-    tableGenRecordKeeperGetNextClass, tableGenRecordKeeperGetNextDef,
-    tableGenRecordKeeperItemGetName, tableGenRecordKeeperItemGetRecord,
-    tableGenRecordKeeperIteratorClone, tableGenRecordKeeperIteratorFree, tableGenRecordVectorFree,
-    tableGenRecordVectorGet, TableGenRecordKeeperIteratorRef, TableGenRecordKeeperRef,
-    TableGenRecordVectorRef,
+    tableGenRecordKeeperFree, tableGenRecordKeeperGetAllDerivedDefinitions,
+    tableGenRecordKeeperGetClass, tableGenRecordKeeperGetDef, tableGenRecordKeeperGetFirstClass,
+    tableGenRecordKeeperGetFirstDef, tableGenRecordKeeperGetNextClass,
+    tableGenRecordKeeperGetNextDef, tableGenRecordKeeperItemGetName,
+    tableGenRecordKeeperItemGetRecord, tableGenRecordKeeperIteratorClone,
+    tableGenRecordKeeperIteratorFree, tableGenRecordVectorFree, tableGenRecordVectorGet,
+    TableGenRecordKeeperIteratorRef, TableGenRecordKeeperRef, TableGenRecordVectorRef,
 };
 use crate::record::Record;
-use crate::TableGen;
+use crate::TableGenParser;
 
-#[derive(Clone, Copy)]
-pub struct RecordKeeperRef<'a> {
+#[derive(Clone)]
+pub struct RecordKeeper {
     raw: TableGenRecordKeeperRef,
-    _reference: PhantomData<&'a TableGen>,
 }
 
-impl<'a> RecordKeeperRef<'a> {
-    pub unsafe fn from_raw(ptr: TableGenRecordKeeperRef) -> RecordKeeperRef<'a> {
-        RecordKeeperRef {
-            raw: ptr,
-            _reference: PhantomData,
-        }
+impl RecordKeeper {
+    pub unsafe fn from_raw(ptr: TableGenRecordKeeperRef) -> RecordKeeper {
+        RecordKeeper { raw: ptr }
     }
 
     pub fn classes(&self) -> NamedRecordIter<'_, IsClass> {
@@ -80,6 +76,14 @@ impl<'a> RecordKeeperRef<'a> {
     }
 }
 
+impl Drop for RecordKeeper {
+    fn drop(&mut self) {
+        unsafe {
+            tableGenRecordKeeperFree(self.raw);
+        }
+    }
+}
+
 #[doc(hidden)]
 pub struct IsClass;
 #[doc(hidden)]
@@ -105,7 +109,7 @@ impl NextRecord for IsDef {
 pub struct NamedRecordIter<'a, T> {
     raw: TableGenRecordKeeperIteratorRef,
     _kind: PhantomData<T>,
-    _reference: PhantomData<RecordKeeperRef<'a>>,
+    _reference: PhantomData<&'a RecordKeeper>,
 }
 
 impl<'a, T> NamedRecordIter<'a, T> {
@@ -188,20 +192,21 @@ mod test {
 
     #[test]
     fn classes_and_defs() {
-        let tablegen = TableGen::new(
-            r#"
-            class A;
-            class B;
-            class C;
+        let rk = TableGenParser::new()
+            .add_source(
+                r#"
+                class A;
+                class B;
+                class C;
 
-            def D1: A;
-            def D2: B;
-            def D3: C;
-        "#,
-            &[],
-        )
-        .expect("valid tablegen");
-        let rk = tablegen.record_keeper();
+                def D1: A;
+                def D2: B;
+                def D3: C;
+                "#,
+            )
+            .unwrap()
+            .parse()
+            .expect("valid tablegen");
         rk.classes().for_each(|i| assert!(i.1.name() == i.0));
         rk.defs().for_each(|i| assert!(i.1.name() == i.0));
         assert!(rk.classes().map(|i| i.0).eq(["A", "B", "C"]));
@@ -210,20 +215,21 @@ mod test {
 
     #[test]
     fn derived_defs() {
-        let tablegen = TableGen::new(
-            r#"
-            class A;
-            class B;
-            class C;
+        let rk = TableGenParser::new()
+            .add_source(
+                r#"
+                class A;
+                class B;
+                class C;
 
-            def D1: A;
-            def D2: A, B;
-            def D3: B, C;
-        "#,
-            &[],
-        )
-        .expect("valid tablegen");
-        let rk = tablegen.record_keeper();
+                def D1: A;
+                def D2: A, B;
+                def D3: B, C;
+                "#,
+            )
+            .unwrap()
+            .parse()
+            .expect("valid tablegen");
         let a = rk.all_derived_definitions("A");
         assert!(a.map(|i| i.name()).eq(["D1", "D2"]));
         let b = rk.all_derived_definitions("B");
@@ -232,15 +238,16 @@ mod test {
 
     #[test]
     fn single() {
-        let tablegen = TableGen::new(
-            r#"
-            class A;
-            def D1;
-        "#,
-            &[],
-        )
-        .expect("valid tablegen");
-        let rk = tablegen.record_keeper();
+        let rk = TableGenParser::new()
+            .add_source(
+                r#"
+                class A;
+                def D1;
+                "#,
+            )
+            .unwrap()
+            .parse()
+            .expect("valid tablegen");
         assert_eq!(rk.class("A").expect("class exists").name(), "A");
         assert_eq!(rk.def("D1").expect("def exists").name(), "D1");
     }

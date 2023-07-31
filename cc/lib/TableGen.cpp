@@ -14,41 +14,65 @@
 using ctablegen::RecordMap;
 using ctablegen::tableGenFromRecType;
 
-// TableGen
-TableGenRef tableGenInitialize(const char *source, const size_t includes_sz,
-                               const char *includes[]) {
-  auto rk = new RecordKeeper;
-  auto sm = new SourceMgr;
+RecordKeeper *ctablegen::TableGenParser::parse() {
+  auto recordKeeper = new RecordKeeper;
+  sourceMgr.setIncludeDirs(includeDirs);
+  bool result = TableGenParseFile(sourceMgr, *recordKeeper);
+  if (!result) {
+    return recordKeeper;
+  }
+  delete recordKeeper;
+  return nullptr;
+}
 
-  // Check that the input table definition exists
+void ctablegen::TableGenParser::addIncludePath(const StringRef include) {
+  includeDirs.push_back(std::string(include));
+}
+
+bool ctablegen::TableGenParser::addSource(const StringRef source) {
   ErrorOr<std::unique_ptr<MemoryBuffer>> FileOrErr =
       MemoryBuffer::getMemBuffer(source);
 
   if (std::error_code EC = FileOrErr.getError()) {
-    return nullptr;
+    return false;
   }
 
-  // Add the table definition source
-  sm->AddNewSourceBuffer(std::move(*FileOrErr), SMLoc());
+  sourceMgr.AddNewSourceBuffer(std::move(*FileOrErr), SMLoc());
+  return true;
+}
 
-  // Add the include directories for any table definition dependencies
-  std::vector<std::string> includes_v;
-  for (size_t i = 0; i < includes_sz; i++) {
-    includes_v.push_back(std::string(includes[i]));
+bool ctablegen::TableGenParser::addSourceFile(const StringRef source) {
+  ErrorOr<std::unique_ptr<MemoryBuffer>> FileOrErr =
+      MemoryBuffer::getFile(source);
+
+  if (std::error_code EC = FileOrErr.getError()) {
+    return false;
   }
-  sm->setIncludeDirs(includes_v);
 
-  return wrap(new ctablegen::TableGen(rk, sm));
+  sourceMgr.AddNewSourceBuffer(std::move(*FileOrErr), SMLoc());
+  return true;
 }
 
-void tableGenFree(TableGenRef tg_ref) { delete unwrap(tg_ref); }
-
-TableGenRecordKeeperRef tableGenGetRecordKeeper(TableGenRef tg_ref) {
-  return wrap(unwrap(tg_ref)->record_keeper());
+TableGenParserRef tableGenGet() {
+  return wrap(new ctablegen::TableGenParser());
 }
 
-TableGenBool tableGenParse(TableGenRef tg_ref) {
-  return !unwrap(tg_ref)->Parse();
+void tableGenFree(TableGenParserRef tg_ref) { delete unwrap(tg_ref); }
+
+TableGenBool tableGenAddSource(TableGenParserRef tg_ref, const char *source) {
+  return unwrap(tg_ref)->addSource(source);
+}
+
+TableGenBool tableGenAddSourceFile(TableGenParserRef tg_ref, const char *source) {
+  return unwrap(tg_ref)->addSourceFile(source);
+}
+
+void tableGenAddIncludePath(TableGenParserRef tg_ref, const char *include) {
+  return unwrap(tg_ref)->addIncludePath(include);
+}
+
+TableGenRecordKeeperRef tableGenParse(TableGenParserRef tg_ref) {
+  return wrap(unwrap(tg_ref)->parse());
 }
 
 // LLVM ListType

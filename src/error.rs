@@ -13,8 +13,12 @@ use crate::init::TypedInit;
 
 #[derive(Error, Debug)]
 pub enum TableGenError {
-    #[error("error creating struct: `{0}`")]
-    CreateStruct(String),
+    #[error("error parsing TableGen file")]
+    Parse,
+    #[error("error adding TableGen source")]
+    AddSource,
+    #[error("error adding TableGen include path (directory not found)")]
+    AddInclude,
     #[error("pointer is null")]
     NullPointer,
     #[error("invalid bit range")]

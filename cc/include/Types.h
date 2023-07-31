@@ -17,7 +17,7 @@ extern "C" {
 
 typedef int TableGenBool;
 
-typedef struct TableGen *TableGenRef;
+typedef struct TableGen *TableGenParserRef;
 typedef struct TableGenRecordKeeper *TableGenRecordKeeperRef;
 
 typedef struct TableGenRecordMap *TableGenRecordMapRef;
