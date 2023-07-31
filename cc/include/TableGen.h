@@ -37,6 +37,11 @@ typedef enum {
   TableGenInvalidRecTyKind
 } TableGenRecTyKind;
 
+typedef struct TableGenStringRef {
+  const char *data;
+  size_t len;
+} TableGenStringRef;
+
 TableGenParserRef tableGenGet();
 void tableGenFree(TableGenParserRef tg_ref);
 TableGenBool tableGenAddSource(TableGenParserRef tg_ref, const char *source);
@@ -54,12 +59,12 @@ tableGenRecordKeeperGetClasses(TableGenRecordKeeperRef rk_ref);
 TableGenRecordMapRef
 tableGenRecordKeeperGetDefs(TableGenRecordKeeperRef rk_ref);
 TableGenRecordRef tableGenRecordKeeperGetClass(TableGenRecordKeeperRef rk_ref,
-                                               const char *name);
+                                               TableGenStringRef name);
 TableGenRecordRef tableGenRecordKeeperGetDef(TableGenRecordKeeperRef rk_ref,
-                                             const char *name);
+                                             TableGenStringRef name);
 TableGenRecordVectorRef
 tableGenRecordKeeperGetAllDerivedDefinitions(TableGenRecordKeeperRef rk_ref,
-                                             const char *className);
+                                             TableGenStringRef className);
 
 TableGenRecordRef tableGenRecordVectorGet(TableGenRecordVectorRef vec_ref,
                                           size_t index);
@@ -74,7 +79,7 @@ tableGenRecordKeeperGetFirstDef(TableGenRecordKeeperRef rk_ref);
 void tableGenRecordKeeperGetNextClass(TableGenRecordKeeperIteratorRef *item);
 void tableGenRecordKeeperGetNextDef(TableGenRecordKeeperIteratorRef *item);
 
-const char *tableGenRecordKeeperItemGetName(TableGenRecordKeeperIteratorRef item);
+TableGenStringRef tableGenRecordKeeperItemGetName(TableGenRecordKeeperIteratorRef item);
 TableGenRecordRef
 tableGenRecordKeeperItemGetRecord(TableGenRecordKeeperIteratorRef item);
 void tableGenRecordKeeperIteratorFree(TableGenRecordKeeperIteratorRef item);
@@ -82,17 +87,18 @@ TableGenRecordKeeperIteratorRef tableGenRecordKeeperIteratorClone(TableGenRecord
 
 // LLVM Record
 TableGenRecordKeeperRef tableGenRecordGetRecords(TableGenRecordRef record_ref);
-const char *tableGenRecordGetName(TableGenRecordRef record_ref);
+TableGenStringRef tableGenRecordGetName(TableGenRecordRef record_ref);
 TableGenRecordValRef tableGenRecordGetValue(TableGenRecordRef record_ref,
-                                            const char *name);
+                                            TableGenStringRef name);
 TableGenRecTyKind tableGenRecordGetFieldType(TableGenRecordRef record_ref,
-                                             const char *name);
+                                             TableGenStringRef name);
 TableGenBool tableGenRecordIsAnonymous(TableGenRecordRef record_ref);
 TableGenBool tableGenRecordIsSubclassOf(TableGenRecordRef record_ref,
-                                        const char *name);
+                                        TableGenStringRef name);
 
 // LLVM RecordVal
-const char *tableGenRecordValGetName(TableGenRecordValRef rv_ref);
+TableGenStringRef tableGenRecordValGetName(TableGenRecordValRef rv_ref);
+TableGenTypedInitRef tableGenRecordValGetNameInit(TableGenRecordValRef rv_ref);
 TableGenRecTyKind tableGenRecordValGetType(TableGenRecordValRef rv_ref);
 TableGenTypedInitRef tableGenRecordValGetValue(TableGenRecordValRef rv_ref);
 void tableGenRecordValTest(TableGenRecordValRef rv_ref);
@@ -119,14 +125,17 @@ size_t tableGenListRecordNumElements(TableGenTypedInitRef rv_ref);
 // LLVM DagType
 TableGenTypedInitRef tableGenDagRecordGet(TableGenTypedInitRef rv_ref,
                                           size_t index);
-const char *tableGenDagRecordArgName(TableGenTypedInitRef rv_ref, size_t index);
+TableGenStringRef tableGenDagRecordArgName(TableGenTypedInitRef rv_ref, size_t index);
 size_t tableGenDagRecordNumArgs(TableGenTypedInitRef rv_ref);
 
 // Utility
 TableGenRecTyKind tableGenInitRecType(TableGenTypedInitRef ti);
 TableGenBool tableGenBitInitGetValue(TableGenTypedInitRef ti, int8_t *bit);
 int8_t *tableGenBitsInitGetValue(TableGenTypedInitRef ti, size_t *len);
+TableGenBool tableGenBitsInitGetNumBits(TableGenTypedInitRef ti, size_t *len);
+TableGenTypedInitRef tableGenBitsInitGetBitInit(TableGenTypedInitRef ti, size_t index);
 TableGenBool tableGenIntInitGetValue(TableGenTypedInitRef ti, int64_t *integer);
+TableGenStringRef tableGenStringInitGetValue(TableGenTypedInitRef ti);
 char *tableGenStringInitGetValueNewString(TableGenTypedInitRef ti);
 TableGenRecordRef tableGenDefInitGetValue(TableGenTypedInitRef ti);
 

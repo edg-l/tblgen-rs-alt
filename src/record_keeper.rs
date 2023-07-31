@@ -8,7 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
 
 use crate::raw::{
@@ -21,6 +20,7 @@ use crate::raw::{
     TableGenRecordKeeperIteratorRef, TableGenRecordKeeperRef, TableGenRecordVectorRef,
 };
 use crate::record::Record;
+use crate::string_ref::StringRef;
 
 /// Struct that holds all records from a TableGen file.
 #[derive(Debug)]
@@ -55,8 +55,7 @@ impl RecordKeeper {
     /// Returns the class with the given name.
     pub fn class(&self, name: &str) -> Option<Record> {
         unsafe {
-            let name = CString::new(name).ok()?;
-            let class = tableGenRecordKeeperGetClass(self.raw, name.as_ptr());
+            let class = tableGenRecordKeeperGetClass(self.raw, StringRef::from(name).to_raw());
             if class.is_null() {
                 None
             } else {
@@ -68,8 +67,7 @@ impl RecordKeeper {
     /// Returns the definition with the given name.
     pub fn def(&self, name: &str) -> Option<Record> {
         unsafe {
-            let name = CString::new(name).ok()?;
-            let def = tableGenRecordKeeperGetDef(self.raw, name.as_ptr());
+            let def = tableGenRecordKeeperGetDef(self.raw, StringRef::from(name).to_raw());
             if def.is_null() {
                 None
             } else {
@@ -81,11 +79,10 @@ impl RecordKeeper {
     /// Returns an iterator over all definitions that derive from the class with
     /// the given name.
     pub fn all_derived_definitions(&self, name: &str) -> RecordIter {
-        let name = CString::new(name).unwrap();
         unsafe {
             RecordIter::from_raw_vector(tableGenRecordKeeperGetAllDerivedDefinitions(
                 self.raw,
-                name.as_ptr(),
+                StringRef::from(name).to_raw(),
             ))
         }
     }
@@ -138,17 +135,15 @@ impl<'a, T> NamedRecordIter<'a, T> {
 }
 
 impl<'a, T: NextRecord> Iterator for NamedRecordIter<'a, T> {
-    type Item = (String, Record<'a>);
+    type Item = (Result<&'a str, std::str::Utf8Error>, Record<'a>);
 
-    fn next(&mut self) -> Option<(String, Record<'a>)> {
+    fn next(&mut self) -> Option<Self::Item> {
         let current = if self.raw.is_null() {
             return None;
         } else {
             unsafe {
                 Some((
-                    CStr::from_ptr(tableGenRecordKeeperItemGetName(self.raw))
-                        .to_string_lossy()
-                        .into_owned(),
+                    StringRef::from_raw(tableGenRecordKeeperItemGetName(self.raw)).try_into(),
                     Record::from_raw(tableGenRecordKeeperItemGetRecord(self.raw)),
                 ))
             }
@@ -227,10 +222,15 @@ mod test {
             .unwrap()
             .parse()
             .expect("valid tablegen");
-        rk.classes().for_each(|i| assert!(i.1.name() == i.0));
-        rk.defs().for_each(|i| assert!(i.1.name() == i.0));
-        assert!(rk.classes().map(|i| i.0).eq(["A", "B", "C"]));
-        assert!(rk.defs().map(|i| i.0).eq(["D1", "D2", "D3"]));
+        rk.classes().for_each(|i| {
+            println!("{:#?}", i.1.name());
+            println!("{:#?}", i.0);
+            assert!(i.1.name().unwrap() == i.0.unwrap())
+        });
+        rk.defs()
+            .for_each(|i| assert!(i.1.name().unwrap() == i.0.unwrap()));
+        assert!(rk.classes().map(|i| i.0.unwrap()).eq(["A", "B", "C"]));
+        assert!(rk.defs().map(|i| i.0.unwrap()).eq(["D1", "D2", "D3"]));
     }
 
     #[test]
@@ -251,9 +251,9 @@ mod test {
             .parse()
             .expect("valid tablegen");
         let a = rk.all_derived_definitions("A");
-        assert!(a.map(|i| i.name()).eq(["D1", "D2"]));
+        assert!(a.map(|i| i.name().unwrap().to_string()).eq(["D1", "D2"]));
         let b = rk.all_derived_definitions("B");
-        assert!(b.map(|i| i.name()).eq(["D2", "D3"]));
+        assert!(b.map(|i| i.name().unwrap().to_string()).eq(["D2", "D3"]));
     }
 
     #[test]
@@ -268,7 +268,7 @@ mod test {
             .unwrap()
             .parse()
             .expect("valid tablegen");
-        assert_eq!(rk.class("A").expect("class exists").name(), "A");
-        assert_eq!(rk.def("D1").expect("def exists").name(), "D1");
+        assert_eq!(rk.class("A").expect("class exists").name().unwrap(), "A");
+        assert_eq!(rk.def("D1").expect("def exists").name().unwrap(), "D1");
     }
 }

@@ -10,6 +10,7 @@
 
 #include "TableGen.h"
 #include "TableGen.hpp"
+#include "Types.h"
 
 namespace ctablegen {
 
@@ -72,6 +73,27 @@ int8_t *tableGenBitsInitGetValue(TableGenTypedInitRef ti, size_t *len) {
   return bits;
 }
 
+TableGenBool tableGenBitsInitGetNumBits(TableGenTypedInitRef ti, size_t *len) {
+  if (!ti)
+    return false;
+  auto bits_init = dyn_cast<BitsInit>(unwrap(ti));
+  if (!bits_init)
+    return false;
+
+  *len = bits_init->getNumBits();
+  return true;
+}
+
+TableGenTypedInitRef tableGenBitsInitGetBitInit(TableGenTypedInitRef ti, size_t index) {
+  if (!ti)
+    return nullptr;
+  auto bits_init = dyn_cast<BitsInit>(unwrap(ti));
+  if (!bits_init)
+    return nullptr;
+
+  return wrap(static_cast<BitInit *>(bits_init->getBit(index)));
+}
+
 TableGenBool tableGenIntInitGetValue(TableGenTypedInitRef ti,
                                      int64_t *integer) {
   if (!ti)
@@ -82,6 +104,16 @@ TableGenBool tableGenIntInitGetValue(TableGenTypedInitRef ti,
 
   *integer = int_init->getValue();
   return true;
+}
+
+TableGenStringRef tableGenStringInitGetValue(TableGenTypedInitRef ti) {
+  if (!ti)
+    return TableGenStringRef { .data = nullptr, .len = 0 };
+  auto str_init = dyn_cast<StringInit>(unwrap(ti));
+  if (!str_init)
+    return TableGenStringRef { .data = nullptr, .len = 0 };
+  auto val = str_init->getValue();
+  return TableGenStringRef { .data = val.data(), .len = val.size() };
 }
 
 char *tableGenStringInitGetValueNewString(TableGenTypedInitRef ti) {

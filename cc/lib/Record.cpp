@@ -17,18 +17,19 @@ TableGenRecordKeeperRef tableGenRecordGetRecords(TableGenRecordRef record_ref) {
   return wrap(&unwrap(record_ref)->getRecords());
 }
 
-const char *tableGenRecordGetName(TableGenRecordRef record_ref) {
-  return unwrap(record_ref)->getName().data();
+TableGenStringRef tableGenRecordGetName(TableGenRecordRef record_ref) {
+  auto name = unwrap(record_ref)->getName();
+  return TableGenStringRef { .data =  name.data(), .len = name.size() };
 }
 
 TableGenRecordValRef tableGenRecordGetValue(TableGenRecordRef record_ref,
-                                            const char *name) {
-  return wrap(unwrap(record_ref)->getValue(StringRef(name)));
+                                            TableGenStringRef name) {
+  return wrap(unwrap(record_ref)->getValue(StringRef(name.data, name.len)));
 }
 
 TableGenRecTyKind tableGenRecordGetFieldType(TableGenRecordRef record_ref,
-                                             const char *name) {
-  auto value = unwrap(record_ref)->getValue(StringRef(name));
+                                             TableGenStringRef name) {
+  auto value = unwrap(record_ref)->getValue(StringRef(name.data, name.len));
   if (!value)
     return TableGenInvalidRecTyKind;
   return tableGenFromRecType(value->getType());
@@ -51,6 +52,6 @@ TableGenBool tableGenRecordIsAnonymous(TableGenRecordRef record_ref) {
   return unwrap(record_ref)->isAnonymous();
 }
 
-TableGenBool tableGenRecordIsSubclassOf(TableGenRecordRef record_ref, const char *name) {
-  return unwrap(record_ref)->isSubClassOf(StringRef(name));
+TableGenBool tableGenRecordIsSubclassOf(TableGenRecordRef record_ref, TableGenStringRef name) {
+  return unwrap(record_ref)->isSubClassOf(StringRef(name.data, name.len));
 }

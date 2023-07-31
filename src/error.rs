@@ -23,8 +23,14 @@ pub enum TableGenError {
     InvalidBitRange,
     #[error("interior null byte in string")]
     StringNulError(#[from] std::ffi::NulError),
+    #[error("invalid UTF-8 string")]
+    StrUtf8Error(#[from] std::str::Utf8Error),
+    #[error("invalid UTF-8 string")]
+    StringUtf8Error(#[from] std::string::FromUtf8Error),
     #[error("incorrect init type")]
     IncorrectInitType,
+    #[error("infallible")]
+    Infallible(#[from] std::convert::Infallible),
     #[error("unknown TableGen error")]
     Unknown,
 }

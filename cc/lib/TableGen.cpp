@@ -9,6 +9,7 @@
 // except according to those terms.
 
 #include "TableGen.hpp"
+#include "TableGen.h"
 #include "Types.h"
 
 using ctablegen::RecordMap;
@@ -130,14 +131,15 @@ size_t tableGenDagRecordNumArgs(TableGenTypedInitRef rv_ref) {
   return dag->getNumArgs();
 }
 
-const char *tableGenDagRecordArgName(TableGenTypedInitRef rv_ref,
+TableGenStringRef tableGenDagRecordArgName(TableGenTypedInitRef rv_ref,
                                      size_t index) {
   auto dag = dyn_cast<DagInit>(unwrap(rv_ref));
   if (!dag)
-    return nullptr;
+    return TableGenStringRef { .data = nullptr, .len = 0 };
   if (index >= dag->getNumArgs())
-    return nullptr;
-  return dag->getArgNameStr(index).data();
+    return TableGenStringRef { .data = nullptr, .len = 0 };
+  auto s = dag->getArgNameStr(index);
+  return TableGenStringRef { .data = s.data(), .len = s.size() };
 }
 
 // Memory

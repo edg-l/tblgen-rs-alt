@@ -45,9 +45,9 @@
 //!         "#,
 //!     )?
 //!     .parse()?;
-//! assert_eq!(keeper.classes().next().unwrap().0, "A");
-//! assert_eq!(keeper.defs().next().unwrap().0, "D");
-//! assert_eq!(keeper.all_derived_definitions("A").next().unwrap().name(), "D");
+//! assert_eq!(keeper.classes().next().unwrap().0, Ok("A"));
+//! assert_eq!(keeper.defs().next().unwrap().0, Ok("D"));
+//! assert_eq!(keeper.all_derived_definitions("A").next().unwrap().name(), Ok("D"));
 //! # Ok(())
 //! # }
 //! ```
@@ -84,6 +84,7 @@ pub mod init;
 pub mod record;
 /// TableGen record keeper.
 pub mod record_keeper;
+mod string_ref;
 mod test;
 
 /// This module contains raw bindings for TableGen. Note that these bindings are
@@ -115,8 +116,6 @@ static TABLEGEN_PARSE_LOCK: Mutex<()> = Mutex::new(());
 
 /// Builder struct that parses TableGen source files and builds a
 /// [`RecordKeeper`].
-///
-/// [`RecordKeeper`]: record_keeper/struct.RecordKeeper.html
 pub struct TableGenParser {
     raw: TableGenParserRef,
     source_strings: Vec<CString>,

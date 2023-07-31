@@ -19,7 +19,8 @@ void tableGenRecordKeeperFree(TableGenRecordKeeperRef rk_ref) {
 
 TableGenRecordKeeperIteratorRef
 tableGenRecordKeeperGetFirstClass(TableGenRecordKeeperRef rk_ref) {
-  return wrap(new RecordMap::const_iterator(unwrap(rk_ref)->getClasses().begin()));
+  return wrap(
+      new RecordMap::const_iterator(unwrap(rk_ref)->getClasses().begin()));
 }
 
 TableGenRecordKeeperIteratorRef
@@ -31,7 +32,7 @@ void tableGenRecordKeeperGetNextClass(TableGenRecordKeeperIteratorRef *item) {
   auto *it = unwrap(*item);
   auto end = (*it)->second->getRecords().getClasses().end();
   if (++*it == end) {
-    delete it;    
+    delete it;
     *item = nullptr;
   }
 }
@@ -40,7 +41,7 @@ void tableGenRecordKeeperGetNextDef(TableGenRecordKeeperIteratorRef *item) {
   auto *it = unwrap(*item);
   auto end = (*it)->second->getRecords().getDefs().end();
   if (++*it == end) {
-    delete it;    
+    delete it;
     *item = nullptr;
   }
 }
@@ -50,15 +51,19 @@ void tableGenRecordKeeperIteratorFree(TableGenRecordKeeperIteratorRef item) {
     delete unwrap(item);
 }
 
-TableGenRecordKeeperIteratorRef tableGenRecordKeeperIteratorClone(TableGenRecordKeeperIteratorRef item) {
+TableGenRecordKeeperIteratorRef
+tableGenRecordKeeperIteratorClone(TableGenRecordKeeperIteratorRef item) {
   return wrap(new RecordMap::const_iterator(*unwrap(item)));
 }
 
-const char *tableGenRecordKeeperItemGetName(TableGenRecordKeeperIteratorRef item) {
-  return (*unwrap(item))->first.c_str();
+TableGenStringRef
+tableGenRecordKeeperItemGetName(TableGenRecordKeeperIteratorRef item) {
+  auto &s = (*unwrap(item))->first;
+  return TableGenStringRef{.data = s.data(), .len = s.size()};
 }
 
-TableGenRecordRef tableGenRecordKeeperItemGetRecord(TableGenRecordKeeperIteratorRef item) {
+TableGenRecordRef
+tableGenRecordKeeperItemGetRecord(TableGenRecordKeeperIteratorRef item) {
   return wrap((*unwrap(item))->second.get());
 }
 
@@ -73,20 +78,21 @@ tableGenRecordKeeperGetDefs(TableGenRecordKeeperRef rk_ref) {
 }
 
 TableGenRecordRef tableGenRecordKeeperGetClass(TableGenRecordKeeperRef rk_ref,
-                                               const char *name) {
-  return wrap(unwrap(rk_ref)->getClass(std::string(name)));
+                                               TableGenStringRef name) {
+  return wrap(unwrap(rk_ref)->getClass(StringRef(name.data, name.len)));
 }
 
 TableGenRecordRef tableGenRecordKeeperGetDef(TableGenRecordKeeperRef rk_ref,
-                                             const char *name) {
-  return wrap(unwrap(rk_ref)->getDef(std::string(name)));
+                                             TableGenStringRef name) {
+  return wrap(unwrap(rk_ref)->getDef(StringRef(name.data, name.len)));
 }
 
 TableGenRecordVectorRef
 tableGenRecordKeeperGetAllDerivedDefinitions(TableGenRecordKeeperRef rk_ref,
-                                             const char *className) {
+                                             TableGenStringRef className) {
   return wrap(new ctablegen::RecordVector(
-      std::move(unwrap(rk_ref)->getAllDerivedDefinitions(className))));
+      std::move(unwrap(rk_ref)->getAllDerivedDefinitions(
+          StringRef(className.data, className.len)))));
 }
 
 TableGenRecordRef tableGenRecordVectorGet(TableGenRecordVectorRef vec_ref,
