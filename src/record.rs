@@ -10,19 +10,22 @@
 
 use paste::paste;
 use std::ffi::{CStr, CString};
+use std::marker::PhantomData;
 
 use crate::raw::{
     tableGenRecordGetFirstValue, tableGenRecordGetName, tableGenRecordGetValue,
     tableGenRecordIsAnonymous, tableGenRecordIsSubclassOf, tableGenRecordValGetName,
     tableGenRecordValGetValue, tableGenRecordValNext, TableGenRecordRef, TableGenRecordValRef,
 };
+use crate::RecordKeeper;
 
 use crate::error::{self, TableGenError};
 use crate::init::{DagInit, ListInit, TypedInit};
 
-#[derive(Debug)]
-pub struct Record {
+#[derive(Debug, Clone, Copy)]
+pub struct Record<'a> {
     raw: TableGenRecordRef,
+    _reference: PhantomData<&'a RecordKeeper>,
 }
 
 macro_rules! record_value {
@@ -35,9 +38,12 @@ macro_rules! record_value {
     };
 }
 
-impl Record {
-    pub unsafe fn from_raw(ptr: TableGenRecordRef) -> Record {
-        Record { raw: ptr }
+impl<'a> Record<'a> {
+    pub unsafe fn from_raw(ptr: TableGenRecordRef) -> Record<'a> {
+        Record {
+            raw: ptr,
+            _reference: PhantomData,
+        }
     }
 
     pub fn name(&self) -> String {
@@ -71,7 +77,7 @@ impl Record {
         unsafe { tableGenRecordIsSubclassOf(self.raw, name.as_ptr()) > 0 }
     }
 
-    pub fn values(&self) -> RecordValueIter {
+    pub fn values(self) -> RecordValueIter<'a> {
         RecordValueIter::new(self)
     }
 }
@@ -88,10 +94,10 @@ macro_rules! record_value_as {
 
 macro_rules! try_into {
     ($type:ty) => {
-        impl TryFrom<RecordValue> for $type {
+        impl<'a> TryFrom<RecordValue<'a>> for $type {
             type Error = TableGenError;
 
-            fn try_from(record_value: RecordValue) -> Result<Self, Self::Error> {
+            fn try_from(record_value: RecordValue<'a>) -> Result<Self, Self::Error> {
                 record_value.value.try_into()
             }
         }
@@ -101,26 +107,26 @@ macro_rules! try_into {
 try_into!(i8);
 try_into!(Vec<i8>);
 try_into!(i64);
-try_into!(ListInit);
-try_into!(DagInit);
-try_into!(Record);
+try_into!(ListInit<'a>);
+try_into!(DagInit<'a>);
+try_into!(Record<'a>);
 try_into!(String);
 
-impl From<RecordValue> for TypedInit {
-    fn from(value: RecordValue) -> Self {
+impl<'a> From<RecordValue<'a>> for TypedInit<'a> {
+    fn from(value: RecordValue<'a>) -> Self {
         value.value
     }
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
-pub struct RecordValue {
+#[derive(Debug, Clone)]
+pub struct RecordValue<'a> {
     raw: TableGenRecordValRef,
     name: String,
-    value: TypedInit,
+    value: TypedInit<'a>,
 }
 
-impl RecordValue {
+impl<'a> RecordValue<'a> {
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -151,26 +157,28 @@ impl RecordValue {
     }
 }
 
-pub struct RecordValueIter {
+pub struct RecordValueIter<'a> {
     record: TableGenRecordRef,
     current: TableGenRecordValRef,
+    _reference: PhantomData<Record<'a>>,
 }
 
-impl RecordValueIter {
-    fn new(record: &Record) -> RecordValueIter {
+impl<'a> RecordValueIter<'a> {
+    fn new(record: Record) -> RecordValueIter<'_> {
         unsafe {
             RecordValueIter {
                 record: record.raw,
                 current: tableGenRecordGetFirstValue(record.raw),
+                _reference: PhantomData,
             }
         }
     }
 }
 
-impl Iterator for RecordValueIter {
-    type Item = RecordValue;
+impl<'a> Iterator for RecordValueIter<'a> {
+    type Item = RecordValue<'a>;
 
-    fn next(&mut self) -> Option<RecordValue> {
+    fn next(&mut self) -> Option<RecordValue<'a>> {
         let next = unsafe { tableGenRecordValNext(self.record, self.current) };
         self.current = next;
         if next.is_null() {

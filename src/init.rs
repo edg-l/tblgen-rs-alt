@@ -21,18 +21,18 @@ use crate::{
     error::{self, TableGenError},
     record::Record,
 };
-use std::ffi::CStr;
+use std::{ffi::CStr, marker::PhantomData};
 
-#[derive(Debug)]
-pub enum TypedInit {
+#[derive(Debug, Clone)]
+pub enum TypedInit<'a> {
     Bit(i8),
     Bits(Vec<i8>),
     Code(String),
     Int(i64),
     String(String),
-    List(ListInit),
-    Dag(DagInit),
-    Record(Record),
+    List(ListInit<'a>),
+    Dag(DagInit<'a>),
+    Record(Record<'a>),
     Invalid,
 }
 
@@ -51,13 +51,13 @@ macro_rules! as_inner {
 
 macro_rules! try_into {
     ($variant:ident, $type:ty) => {
-        impl TryFrom<TypedInit> for $type {
+        impl<'a> TryFrom<TypedInit<'a>> for $type {
             type Error = TableGenError;
 
-            fn try_from(value: TypedInit) -> Result<Self, Self::Error> {
+            fn try_from(value: TypedInit<'a>) -> Result<Self, Self::Error> {
                 match value {
                     TypedInit::$variant(v) => Ok(v),
-                    _ => Err(Self::Error::IncorrectInitType(value)),
+                    _ => Err(Self::Error::IncorrectInitType),
                 }
             }
         }
@@ -67,22 +67,22 @@ macro_rules! try_into {
 try_into!(Bit, i8);
 try_into!(Bits, Vec<i8>);
 try_into!(Int, i64);
-try_into!(List, ListInit);
-try_into!(Dag, DagInit);
-try_into!(Record, Record);
+try_into!(List, ListInit<'a>);
+try_into!(Dag, DagInit<'a>);
+try_into!(Record, Record<'a>);
 
-impl TryFrom<TypedInit> for String {
+impl<'a> TryFrom<TypedInit<'a>> for String {
     type Error = TableGenError;
 
     fn try_from(value: TypedInit) -> Result<Self, Self::Error> {
         match value {
             TypedInit::String(v) | TypedInit::Code(v) => Ok(v),
-            _ => Err(Self::Error::IncorrectInitType(value)),
+            _ => Err(Self::Error::IncorrectInitType),
         }
     }
 }
 
-impl TypedInit {
+impl<'a> TypedInit<'a> {
     as_inner!(bit, Bit, i8);
     as_inner!(bits, Bits, Vec<i8>);
     as_inner!(code, Code, String);
@@ -90,7 +90,7 @@ impl TypedInit {
     as_inner!(string, String, String);
     as_inner!(list, List, ListInit);
     as_inner!(dag, Dag, DagInit);
-    as_inner!(def, Record, Record);
+    as_inner!(def, Record, Record<'a>);
 
     #[allow(non_upper_case_globals)]
     pub unsafe fn from_raw(init: TableGenTypedInitRef) -> error::Result<Self> {
@@ -145,17 +145,21 @@ impl TypedInit {
     }
 }
 
-#[derive(Debug)]
-pub struct DagInit {
+#[derive(Debug, Clone, Copy)]
+pub struct DagInit<'a> {
     raw: TableGenTypedInitRef,
+    _reference: PhantomData<TypedInit<'a>>,
 }
 
-impl DagInit {
-    pub fn from_raw(val: TableGenTypedInitRef) -> DagInit {
-        DagInit { raw: val }
+impl<'a> DagInit<'a> {
+    pub fn from_raw(val: TableGenTypedInitRef) -> DagInit<'a> {
+        DagInit {
+            raw: val,
+            _reference: PhantomData,
+        }
     }
 
-    pub fn args(&self) -> DagIter {
+    pub fn args(self) -> DagIter<'a> {
         DagIter {
             dag: self,
             index: 0,
@@ -175,7 +179,7 @@ impl DagInit {
         }
     }
 
-    pub fn get(&self, index: usize) -> Option<TypedInit> {
+    pub fn get(&self, index: usize) -> Option<TypedInit<'a>> {
         let value = unsafe { tableGenDagRecordGet(self.raw, index) };
         if !value.is_null() {
             unsafe { TypedInit::from_raw(value).ok() }
@@ -184,19 +188,19 @@ impl DagInit {
         }
     }
 
-    pub unsafe fn get_unchecked(&self, index: usize) -> Option<TypedInit> {
+    pub unsafe fn get_unchecked(&self, index: usize) -> Option<TypedInit<'a>> {
         TypedInit::from_raw(tableGenDagRecordGet(self.raw, index)).ok()
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct DagIter<'a> {
-    dag: &'a DagInit,
+    dag: DagInit<'a>,
     index: usize,
 }
 
 impl<'a> Iterator for DagIter<'a> {
-    type Item = (String, TypedInit);
+    type Item = (String, TypedInit<'a>);
 
     fn next(&mut self) -> Option<Self::Item> {
         let next = self.dag.get(self.index);
@@ -210,17 +214,21 @@ impl<'a> Iterator for DagIter<'a> {
     }
 }
 
-#[derive(Debug)]
-pub struct ListInit {
+#[derive(Debug, Clone, Copy)]
+pub struct ListInit<'a> {
     raw: TableGenTypedInitRef,
+    _reference: PhantomData<TypedInit<'a>>,
 }
 
-impl ListInit {
-    pub fn from_raw(val: TableGenTypedInitRef) -> ListInit {
-        ListInit { raw: val }
+impl<'a> ListInit<'a> {
+    pub fn from_raw(val: TableGenTypedInitRef) -> ListInit<'a> {
+        ListInit {
+            raw: val,
+            _reference: PhantomData,
+        }
     }
 
-    pub fn iter(&self) -> ListIter {
+    pub fn iter(self) -> ListIter<'a> {
         ListIter {
             list: self,
             index: 0,
@@ -245,16 +253,16 @@ impl ListInit {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ListIter<'a> {
-    list: &'a ListInit,
+    list: ListInit<'a>,
     index: usize,
 }
 
 impl<'a> Iterator for ListIter<'a> {
-    type Item = TypedInit;
+    type Item = TypedInit<'a>;
 
-    fn next(&mut self) -> Option<TypedInit> {
+    fn next(&mut self) -> Option<TypedInit<'a>> {
         let next = unsafe { tableGenListRecordGet(self.list.raw, self.index) };
         self.index += 1;
         if !next.is_null() {

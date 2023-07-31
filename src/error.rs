@@ -9,8 +9,6 @@
 
 use thiserror::Error;
 
-use crate::init::TypedInit;
-
 #[derive(Error, Debug)]
 pub enum TableGenError {
     #[error("error parsing TableGen file")]
@@ -25,8 +23,8 @@ pub enum TableGenError {
     InvalidBitRange,
     #[error("interior null byte in string")]
     StringNulError(#[from] std::ffi::NulError),
-    #[error("incorrect init type: cannot convert {0:?} to the requested type")]
-    IncorrectInitType(TypedInit),
+    #[error("incorrect init type")]
+    IncorrectInitType,
     #[error("unknown TableGen error")]
     Unknown,
 }
