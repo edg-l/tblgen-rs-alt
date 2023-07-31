@@ -76,16 +76,16 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     cc::Build::new()
         .files(
-            std::fs::read_dir("cc")?
+            std::fs::read_dir("cc/lib")?
                 .into_iter()
                 .filter(|r| r.is_ok())
                 .map(|r| r.unwrap().path())
-                .filter(|r| r.is_file() && r.extension().unwrap() == "cc"),
+                .filter(|r| r.is_file() && r.extension().unwrap() == "cpp"),
         )
         .cpp(true)
-        .include("cc")
+        .include("cc/include")
         .include(llvm_config("--includedir")?)
-        // .flag("-MJcompile_commands.o.json")
+        .flag("-MJcompile_commands.o.json")
         .opt_level(3)
         .compile("CTableGen");
 
@@ -93,7 +93,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     bindgen::builder()
         .header("wrapper.h")
-        .clang_arg(format!("-I{}", "cc"))
+        .clang_arg(format!("-I{}", "cc/include"))
         .clang_arg(format!("-I{}", llvm_config("--includedir")?))
         .default_enum_style(bindgen::EnumVariation::ModuleConsts)
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))

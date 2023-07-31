@@ -8,12 +8,44 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! This crate provides raw bindings and a safe wrapper for [TableGen](https://llvm.org/docs/TableGen/),
+//! a domain-specific language used by the [LLVM project](https://llvm.org/).
+//!
+//! The goal of this crate is to enable users to develop custom [TableGen backends](https://llvm.org/docs/TableGen/BackGuide.html)
+//! in Rust. Hence the primary use case of this crate are procedural macros that
+//! generate Rust code from TableGen description files.
+//!
+//! # Safety
+//!
+//! This crate aims to be completely safe.
+//!
+//! # Supported LLVM Versions
+//!
+//! An installation of LLVM is required to use this crate.
+//! This crate only aims to support the latest version of LLVM. The version of
+//! LLVM currently supported is 17.x.x.
+//!
+//! The `TABLEGEN_SYS_170_PREFIX` environment variable can be used to specify a
+//! custom directory of the LLVM installation.
+//!
+//! # Note
+//!
+//! LLVM does not provide a stable C API for TableGen, and the C API provided by
+//! this crate is not stable. Furthermore, the safe wrapper does not provide a
+//! stable interface either, since this crate is still in early development.
+
+/// Module containing error types.
 pub mod error;
+/// TableGen initialization values.
 pub mod init;
+/// TableGen records and record values.
 pub mod record;
+/// TableGen record keeper.
 pub mod record_keeper;
 mod test;
 
+/// This module contains raw bindings for TableGen. Note that these bindings are
+/// unstable and can change at any time.
 #[allow(non_upper_case_globals)]
 #[allow(non_camel_case_types)]
 #[allow(non_snake_case)]
@@ -39,6 +71,7 @@ use raw::{tableGenFree, tableGenGetRecordKeeper, tableGenInitialize, tableGenPar
 // Until they remove this hack, we have to deal with it ourselves.
 static TABLEGEN_PARSE_LOCK: Mutex<()> = Mutex::new(());
 
+/// Main TableGen struct that manages and parses TableGen source files.
 pub struct TableGen {
     raw: TableGenRef,
 }
