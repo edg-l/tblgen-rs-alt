@@ -191,6 +191,8 @@ impl<'a> From<RecordValue<'a>> for TypedInit<'a> {
 }
 
 /// Struct that represents a field of a [`Record`].
+///
+/// Can be converted into a Rust type using the [`TryInto`] trait.
 #[derive(Debug, Clone, Copy)]
 pub struct RecordValue<'a> {
     pub name: StringInit<'a>,

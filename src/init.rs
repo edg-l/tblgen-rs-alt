@@ -8,6 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! This module contains smart pointers that reference various `Init` types in
+//! TableGen.
+//!
+//! Init reference types can be converted to Rust types using [`Into`] and
+//! [`TryInto`]. Most conversions are cheap, except for conversion to
+//! [`String`].
+
 use crate::{
     raw::{
         tableGenBitInitGetValue, tableGenBitsInitGetBitInit, tableGenBitsInitGetNumBits,
@@ -21,8 +28,9 @@ use crate::{
 use paste::paste;
 
 use crate::{error::TableGenError, record::Record};
-use std::{ffi::CStr, marker::PhantomData};
+use std::marker::PhantomData;
 
+/// Enum that holds a reference to a `TypedInit`.
 #[derive(Debug, Clone, Copy)]
 pub enum TypedInit<'a> {
     Bit(BitInit<'a>),
