@@ -85,7 +85,7 @@ pub mod record;
 /// TableGen record keeper.
 pub mod record_keeper;
 mod string_ref;
-mod test;
+mod util;
 
 /// This module contains raw bindings for TableGen. Note that these bindings are
 /// unstable and can change at any time.

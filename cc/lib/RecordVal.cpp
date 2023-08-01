@@ -57,3 +57,13 @@ tableGenRecordValGetValAsDefRecord(TableGenRecordValRef rv_ref) {
   return tableGenDefInitGetValue(
       wrap(dyn_cast<TypedInit>(unwrap(rv_ref)->getValue())));
 }
+
+void tableGenRecordValPrint(TableGenRecordValRef rv_ref, TableGenStringCallback callback,
+                        void *userData) {
+  ctablegen::CallbackOstream stream(callback, userData);
+  stream << *unwrap(rv_ref);
+}
+
+void tableGenRecordValDump(TableGenRecordValRef rv_ref) {
+  unwrap(rv_ref)->dump();
+}

@@ -9,28 +9,56 @@
 // except according to those terms.
 
 use paste::paste;
+use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::str::Utf8Error;
 
 use crate::raw::{
     tableGenRecordGetFirstValue, tableGenRecordGetName, tableGenRecordGetValue,
-    tableGenRecordIsAnonymous, tableGenRecordIsSubclassOf, tableGenRecordValGetNameInit,
-    tableGenRecordValGetValue, tableGenRecordValNext, TableGenRecordRef, TableGenRecordValRef,
+    tableGenRecordIsAnonymous, tableGenRecordIsSubclassOf, tableGenRecordPrint,
+    tableGenRecordValGetNameInit, tableGenRecordValGetValue, tableGenRecordValNext,
+    tableGenRecordValPrint, TableGenRecordRef, TableGenRecordValRef,
 };
 use crate::RecordKeeper;
 
 use crate::error::TableGenError;
 use crate::init::{BitInit, DagInit, ListInit, StringInit, TypedInit};
 use crate::string_ref::StringRef;
+use crate::util::print_callback;
+use std::fmt::{self, Debug, Display, Formatter};
 
 /// An immutable reference to a TableGen record.
 ///
 /// This reference cannot outlive the [`RecordKeeper`] from which it is
 /// borrowed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Record<'a> {
     raw: TableGenRecordRef,
     _reference: PhantomData<&'a RecordKeeper>,
+}
+
+impl<'a> Display for Record<'a> {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        let mut data = (formatter, Ok(()));
+
+        unsafe {
+            tableGenRecordPrint(
+                self.raw,
+                Some(print_callback),
+                &mut data as *mut _ as *mut c_void,
+            );
+        }
+
+        data.1
+    }
+}
+
+impl<'a> Debug for Record<'a> {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        writeln!(formatter, "Record(")?;
+        Display::fmt(self, formatter)?;
+        write!(formatter, ")")
+    }
 }
 
 macro_rules! record_value {
@@ -195,8 +223,25 @@ impl<'a> From<RecordValue<'a>> for TypedInit<'a> {
 /// Can be converted into a Rust type using the [`TryInto`] trait.
 #[derive(Debug, Clone, Copy)]
 pub struct RecordValue<'a> {
+    raw: TableGenRecordValRef,
     pub name: StringInit<'a>,
     pub init: TypedInit<'a>,
+}
+
+impl<'a> Display for RecordValue<'a> {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        let mut data = (formatter, Ok(()));
+
+        unsafe {
+            tableGenRecordValPrint(
+                self.raw,
+                Some(print_callback),
+                &mut data as *mut _ as *mut c_void,
+            );
+        }
+
+        data.1
+    }
 }
 
 impl<'a> RecordValue<'a> {
@@ -208,7 +253,11 @@ impl<'a> RecordValue<'a> {
     pub unsafe fn from_raw(ptr: TableGenRecordValRef) -> Self {
         let name = StringInit::from_raw(tableGenRecordValGetNameInit(ptr));
         let value = TypedInit::from_raw(tableGenRecordValGetValue(ptr));
-        Self { name, init: value }
+        Self {
+            name,
+            init: value,
+            raw: ptr,
+        }
     }
 }
 

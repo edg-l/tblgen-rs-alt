@@ -19,19 +19,25 @@ use crate::{
     raw::{
         tableGenBitInitGetValue, tableGenBitsInitGetBitInit, tableGenBitsInitGetNumBits,
         tableGenDagRecordArgName, tableGenDagRecordGet, tableGenDagRecordNumArgs,
-        tableGenDagRecordOperator, tableGenDefInitGetValue, tableGenInitRecType,
+        tableGenDagRecordOperator, tableGenDefInitGetValue, tableGenInitPrint, tableGenInitRecType,
         tableGenIntInitGetValue, tableGenListRecordGet, tableGenListRecordNumElements,
         tableGenStringInitGetValue, TableGenRecTyKind, TableGenTypedInitRef,
     },
     string_ref::StringRef,
+    util::print_callback,
 };
 use paste::paste;
 
 use crate::{error::TableGenError, record::Record};
-use std::{marker::PhantomData, str::Utf8Error};
+use std::{
+    ffi::c_void,
+    fmt::{self, Debug, Display, Formatter},
+    marker::PhantomData,
+    str::Utf8Error,
+};
 
 /// Enum that holds a reference to a `TypedInit`.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub enum TypedInit<'a> {
     Bit(BitInit<'a>),
     Bits(BitsInit<'a>),
@@ -42,6 +48,40 @@ pub enum TypedInit<'a> {
     Dag(DagInit<'a>),
     Def(DefInit<'a>),
     Invalid,
+}
+
+impl<'a> Display for TypedInit<'a> {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        match self {
+            TypedInit::Bit(init) => write!(formatter, "{}", &init),
+            TypedInit::Bits(init) => write!(formatter, "{}", &init),
+            TypedInit::Code(init) => write!(formatter, "{}", &init),
+            TypedInit::Int(init) => write!(formatter, "{}", &init),
+            TypedInit::String(init) => write!(formatter, "{}", &init),
+            TypedInit::List(init) => write!(formatter, "{}", &init),
+            TypedInit::Dag(init) => write!(formatter, "{}", &init),
+            TypedInit::Def(init) => write!(formatter, "{}", &init),
+            TypedInit::Invalid => write!(formatter, "Invalid"),
+        }
+    }
+}
+
+impl<'a> Debug for TypedInit<'a> {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        write!(formatter, "TypedInit(")?;
+        match self {
+            TypedInit::Bit(init) => write!(formatter, "Bit({:#?})", &init),
+            TypedInit::Bits(init) => write!(formatter, "Bits({:#?})", &init),
+            TypedInit::Code(init) => write!(formatter, "Code({:#?})", &init),
+            TypedInit::Int(init) => write!(formatter, "Int({:#?})", &init),
+            TypedInit::String(init) => write!(formatter, "String({:#?})", &init),
+            TypedInit::List(init) => write!(formatter, "List({:#?})", &init),
+            TypedInit::Dag(init) => write!(formatter, "Dag({:#?})", &init),
+            TypedInit::Def(init) => write!(formatter, "Def({:#?})", &init),
+            TypedInit::Invalid => write!(formatter, "Invalid"),
+        }?;
+        write!(formatter, ")")
+    }
 }
 
 macro_rules! as_inner {
@@ -137,7 +177,7 @@ impl<'a> TypedInit<'a> {
 
 macro_rules! init {
     ($name:ident) => {
-        #[derive(Debug, Clone, Copy)]
+        #[derive(Clone, Copy)]
         pub struct $name<'a> {
             raw: TableGenTypedInitRef,
             _reference: PhantomData<&'a TableGenTypedInitRef>,
@@ -154,6 +194,30 @@ macro_rules! init {
                     raw,
                     _reference: PhantomData,
                 }
+            }
+        }
+
+        impl<'a> Display for $name<'a> {
+            fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+                let mut data = (formatter, Ok(()));
+
+                unsafe {
+                    tableGenInitPrint(
+                        self.raw,
+                        Some(print_callback),
+                        &mut data as *mut _ as *mut c_void,
+                    );
+                }
+
+                data.1
+            }
+        }
+
+        impl<'a> Debug for $name<'a> {
+            fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+                write!(formatter, "{}(", stringify!($name))?;
+                Display::fmt(self, formatter)?;
+                write!(formatter, ")")
             }
         }
     };

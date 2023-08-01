@@ -42,10 +42,11 @@ typedef struct TableGenStringRef {
   size_t len;
 } TableGenStringRef;
 
+typedef void (*TableGenStringCallback)(TableGenStringRef, void *);
+
 TableGenParserRef tableGenGet();
 void tableGenFree(TableGenParserRef tg_ref);
-TableGenBool tableGenAddSource(TableGenParserRef tg_ref,
-                               const char *source);
+TableGenBool tableGenAddSource(TableGenParserRef tg_ref, const char *source);
 TableGenBool tableGenAddSourceFile(TableGenParserRef tg_ref,
                                    TableGenStringRef source);
 void tableGenAddIncludePath(TableGenParserRef tg_ref,
@@ -100,6 +101,9 @@ TableGenRecTyKind tableGenRecordGetFieldType(TableGenRecordRef record_ref,
 TableGenBool tableGenRecordIsAnonymous(TableGenRecordRef record_ref);
 TableGenBool tableGenRecordIsSubclassOf(TableGenRecordRef record_ref,
                                         TableGenStringRef name);
+void tableGenRecordPrint(TableGenRecordRef record_ref,
+                         TableGenStringCallback callback, void *userData);
+void tableGenRecordDump(TableGenRecordRef record_ref);
 
 // LLVM RecordVal
 TableGenStringRef tableGenRecordValGetName(TableGenRecordValRef rv_ref);
@@ -110,6 +114,9 @@ void tableGenRecordValTest(TableGenRecordValRef rv_ref);
 TableGenRecordValRef tableGenRecordGetFirstValue(TableGenRecordRef record_ref);
 TableGenRecordValRef tableGenRecordValNext(TableGenRecordRef record,
                                            TableGenRecordValRef current);
+void tableGenRecordValPrint(TableGenRecordValRef rv_ref,
+                            TableGenStringCallback callback, void *userData);
+void tableGenRecordValDump(TableGenRecordValRef rv_ref);
 
 char *tableGenRecordValGetValAsNewString(TableGenRecordValRef rv_ref);
 TableGenBool tableGenRecordValGetValAsBit(TableGenRecordValRef rv_ref,
@@ -146,6 +153,9 @@ TableGenBool tableGenIntInitGetValue(TableGenTypedInitRef ti, int64_t *integer);
 TableGenStringRef tableGenStringInitGetValue(TableGenTypedInitRef ti);
 char *tableGenStringInitGetValueNewString(TableGenTypedInitRef ti);
 TableGenRecordRef tableGenDefInitGetValue(TableGenTypedInitRef ti);
+void tableGenInitPrint(TableGenTypedInitRef ti,
+                         TableGenStringCallback callback, void *userData);
+void tableGenInitDump(TableGenTypedInitRef ti);
 
 // Memory
 void tableGenBitArrayFree(int8_t bit_array[]);

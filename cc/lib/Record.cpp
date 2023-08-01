@@ -19,7 +19,7 @@ TableGenRecordKeeperRef tableGenRecordGetRecords(TableGenRecordRef record_ref) {
 
 TableGenStringRef tableGenRecordGetName(TableGenRecordRef record_ref) {
   auto name = unwrap(record_ref)->getName();
-  return TableGenStringRef { .data =  name.data(), .len = name.size() };
+  return TableGenStringRef{.data = name.data(), .len = name.size()};
 }
 
 TableGenRecordValRef tableGenRecordGetValue(TableGenRecordRef record_ref,
@@ -52,6 +52,17 @@ TableGenBool tableGenRecordIsAnonymous(TableGenRecordRef record_ref) {
   return unwrap(record_ref)->isAnonymous();
 }
 
-TableGenBool tableGenRecordIsSubclassOf(TableGenRecordRef record_ref, TableGenStringRef name) {
+TableGenBool tableGenRecordIsSubclassOf(TableGenRecordRef record_ref,
+                                        TableGenStringRef name) {
   return unwrap(record_ref)->isSubClassOf(StringRef(name.data, name.len));
+}
+
+void tableGenRecordPrint(TableGenRecordRef record_ref,
+                         TableGenStringCallback callback, void *userData) {
+  ctablegen::CallbackOstream stream(callback, userData);
+  stream << *unwrap(record_ref);
+}
+
+void tableGenRecordDump(TableGenRecordRef record_ref) {
+  unwrap(record_ref)->dump();
 }

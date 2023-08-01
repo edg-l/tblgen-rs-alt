@@ -48,6 +48,30 @@ private:
 
 // Utility
 TableGenRecTyKind tableGenFromRecType(RecTy *rt);
+
+/// A simple raw ostream subclass that forwards write_impl calls to the
+/// user-supplied callback together with opaque user-supplied data.
+class CallbackOstream : public llvm::raw_ostream {
+public:
+  CallbackOstream(std::function<void(TableGenStringRef, void *)> callback,
+                  void *opaqueData)
+      : raw_ostream(/*unbuffered=*/true), callback(std::move(callback)),
+        opaqueData(opaqueData), pos(0u) {}
+
+  void write_impl(const char *ptr, size_t size) override {
+    TableGenStringRef string = TableGenStringRef { .data = ptr, .len = size };
+    callback(string, opaqueData);
+    pos += size;
+  }
+
+  uint64_t current_pos() const override { return pos; }
+
+private:
+  std::function<void(TableGenStringRef, void *)> callback;
+  void *opaqueData;
+  uint64_t pos;
+};
+
 } // namespace ctablegen
 
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(ctablegen::TableGenParser, TableGenParserRef);

@@ -139,3 +139,13 @@ TableGenRecordRef tableGenDefInitGetValue(TableGenTypedInitRef ti) {
     return nullptr;
   return wrap(def_init->getDef());
 }
+
+void tableGenInitPrint(TableGenTypedInitRef ti,
+                         TableGenStringCallback callback, void *userData) {
+  ctablegen::CallbackOstream stream(callback, userData);
+  stream << *unwrap(ti);
+}
+
+void tableGenInitDump(TableGenTypedInitRef ti) {
+  unwrap(ti)->dump();
+}
