@@ -19,20 +19,26 @@ void tableGenRecordKeeperFree(TableGenRecordKeeperRef rk_ref) {
 
 TableGenRecordKeeperIteratorRef
 tableGenRecordKeeperGetFirstClass(TableGenRecordKeeperRef rk_ref) {
-  return wrap(
-      new RecordMap::const_iterator(unwrap(rk_ref)->getClasses().begin()));
+  auto *it = new RecordMap::const_iterator(unwrap(rk_ref)->getClasses().begin());
+  if (*it == unwrap(rk_ref)->getClasses().end()) {
+    return nullptr;
+  }
+  return wrap(it);
 }
 
 TableGenRecordKeeperIteratorRef
 tableGenRecordKeeperGetFirstDef(TableGenRecordKeeperRef rk_ref) {
-  return wrap(new RecordMap::const_iterator(unwrap(rk_ref)->getDefs().begin()));
+  auto *it = new RecordMap::const_iterator(unwrap(rk_ref)->getDefs().begin());
+  if (*it == unwrap(rk_ref)->getDefs().end()) {
+    return nullptr;
+  }
+  return wrap(it);
 }
 
 void tableGenRecordKeeperGetNextClass(TableGenRecordKeeperIteratorRef *item) {
   auto *it = unwrap(*item);
   auto end = (*it)->second->getRecords().getClasses().end();
   if (++*it == end) {
-    delete it;
     *item = nullptr;
   }
 }
@@ -41,7 +47,6 @@ void tableGenRecordKeeperGetNextDef(TableGenRecordKeeperIteratorRef *item) {
   auto *it = unwrap(*item);
   auto end = (*it)->second->getRecords().getDefs().end();
   if (++*it == end) {
-    delete it;
     *item = nullptr;
   }
 }

@@ -61,7 +61,7 @@
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let keeper: RecordKeeper = TableGenParser::new()
 //!     .add_source(r#"include "mlir/IR/OpBase.td""#)?
-//!     .add_include_path(&Path::new(&format!("{}/include", std::env::var("TABLEGEN_170_PREFIX")?)))?
+//!     .add_include_path(&format!("{}/include", std::env::var("TABLEGEN_170_PREFIX")?))
 //!     .parse()?;
 //! let i32_def = keeper.def("I32").expect("has I32 def");
 //! assert!(i32_def.subclass_of("I"));
@@ -96,7 +96,10 @@ pub mod raw {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
-use std::{ffi::CString, path::Path, sync::Mutex};
+use std::ffi::CStr;
+use std::ffi::CString;
+use std::marker::PhantomData;
+use std::sync::Mutex;
 
 pub use init::TypedInit;
 pub use record::Record;
@@ -108,6 +111,7 @@ use raw::{
     tableGenAddIncludePath, tableGenAddSource, tableGenAddSourceFile, tableGenFree, tableGenGet,
     tableGenParse, TableGenParserRef,
 };
+use string_ref::StringRef;
 
 // TableGen only exposes `TableGenParseFile` in its API.
 // However, this function uses global state and therefore it is not thread safe.
@@ -116,50 +120,72 @@ static TABLEGEN_PARSE_LOCK: Mutex<()> = Mutex::new(());
 
 /// Builder struct that parses TableGen source files and builds a
 /// [`RecordKeeper`].
-pub struct TableGenParser {
+pub struct TableGenParser<'s> {
     raw: TableGenParserRef,
     source_strings: Vec<CString>,
+    _source_ref: PhantomData<&'s str>,
 }
 
-impl TableGenParser {
+impl<'s> TableGenParser<'s> {
+    /// Initalizes a new TableGen parser.
     pub fn new() -> Self {
         Self {
             raw: unsafe { tableGenGet() },
             source_strings: Vec::new(),
+            _source_ref: PhantomData,
         }
     }
 
-    pub fn add_include_path(&mut self, source: &Path) -> Result<&mut Self> {
-        if !source.exists() {
-            return Err(TableGenError::AddInclude);
-        }
-
-        let source = CString::new(source.to_str().ok_or(TableGenError::AddSource)?)?;
-        unsafe { tableGenAddIncludePath(self.raw, source.as_ptr()) }
-        Ok(self)
+    /// Adds the given path to the list of included directories.
+    pub fn add_include_path(&mut self, include: &str) -> &mut Self {
+        unsafe { tableGenAddIncludePath(self.raw, StringRef::from(include).to_raw()) }
+        self
     }
 
-    pub fn add_source_file(&mut self, source: &Path) -> Result<&mut Self> {
-        let source = CString::new(source.to_str().ok_or(TableGenError::AddSource)?)?;
-        if unsafe { tableGenAddSourceFile(self.raw, source.as_ptr()) > 0 } {
+    /// Reads TableGen source code from the file at the given path.
+    pub fn add_source_file(&mut self, source: &str) -> Result<&mut Self> {
+        if unsafe { tableGenAddSourceFile(self.raw, StringRef::from(source).to_raw()) > 0 } {
             Ok(self)
         } else {
             Err(TableGenError::AddSource)
         }
     }
 
-    pub fn add_source(&mut self, source: &str) -> Result<&mut Self> {
-        let source = CString::new(source)?;
+    /// Adds the given TableGen source string.
+    ///
+    /// The string must be null-terminated and is not copied, hence it is
+    /// required to live until the source code is parsed.
+    pub fn add_source_raw(&mut self, source: &'s CStr) -> Result<&mut Self> {
         if unsafe { tableGenAddSource(self.raw, source.as_ptr()) > 0 } {
-            // Need to store source buffer until it is parsed,
-            // since tableGenAddSource doesn't copy the string.
-            self.source_strings.push(source);
             Ok(self)
         } else {
             Err(TableGenError::AddSource)
         }
     }
 
+    /// Adds the given TableGen source string.
+    ///
+    /// The string is copied into a null-terminated [`CString`].
+    pub fn add_source(&mut self, source: &str) -> Result<&mut Self> {
+        let string = CString::new(source)?;
+        self.source_strings.push(string);
+        if unsafe {
+            tableGenAddSource(
+                self.raw,
+                self.source_strings.last().expect("not empty").as_ptr(),
+            ) > 0
+        } {
+            Ok(self)
+        } else {
+            Err(TableGenError::AddSource)
+        }
+    }
+
+    /// Parses the TableGen source files and returns a [`RecordKeeper`].
+    ///
+    /// Due to limitations of TableGen, parsing TableGen is not thread-safe.
+    /// In order to provide thread-safety, this method ensures that any
+    /// concurrent parse operations are executed sequentially.
     pub fn parse(&self) -> Result<RecordKeeper> {
         unsafe {
             let guard = TABLEGEN_PARSE_LOCK.lock().unwrap();
@@ -175,7 +201,7 @@ impl TableGenParser {
     }
 }
 
-impl Drop for TableGenParser {
+impl<'s> Drop for TableGenParser<'s> {
     fn drop(&mut self) {
         unsafe {
             tableGenFree(self.raw);

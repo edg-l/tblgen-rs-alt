@@ -44,9 +44,12 @@ typedef struct TableGenStringRef {
 
 TableGenParserRef tableGenGet();
 void tableGenFree(TableGenParserRef tg_ref);
-TableGenBool tableGenAddSource(TableGenParserRef tg_ref, const char *source);
-TableGenBool tableGenAddSourceFile(TableGenParserRef tg_ref, const char *source);
-void tableGenAddIncludePath(TableGenParserRef tg_ref, const char *include);
+TableGenBool tableGenAddSource(TableGenParserRef tg_ref,
+                               const char *source);
+TableGenBool tableGenAddSourceFile(TableGenParserRef tg_ref,
+                                   TableGenStringRef source);
+void tableGenAddIncludePath(TableGenParserRef tg_ref,
+                            TableGenStringRef include);
 
 /// NOTE: TableGen currently relies on global state within a given parser
 ///       invocation, so this function is not thread-safe.
@@ -79,11 +82,13 @@ tableGenRecordKeeperGetFirstDef(TableGenRecordKeeperRef rk_ref);
 void tableGenRecordKeeperGetNextClass(TableGenRecordKeeperIteratorRef *item);
 void tableGenRecordKeeperGetNextDef(TableGenRecordKeeperIteratorRef *item);
 
-TableGenStringRef tableGenRecordKeeperItemGetName(TableGenRecordKeeperIteratorRef item);
+TableGenStringRef
+tableGenRecordKeeperItemGetName(TableGenRecordKeeperIteratorRef item);
 TableGenRecordRef
 tableGenRecordKeeperItemGetRecord(TableGenRecordKeeperIteratorRef item);
 void tableGenRecordKeeperIteratorFree(TableGenRecordKeeperIteratorRef item);
-TableGenRecordKeeperIteratorRef tableGenRecordKeeperIteratorClone(TableGenRecordKeeperIteratorRef item);
+TableGenRecordKeeperIteratorRef
+tableGenRecordKeeperIteratorClone(TableGenRecordKeeperIteratorRef item);
 
 // LLVM Record
 TableGenRecordKeeperRef tableGenRecordGetRecords(TableGenRecordRef record_ref);
@@ -123,9 +128,11 @@ TableGenTypedInitRef tableGenListRecordGet(TableGenTypedInitRef rv_ref,
 size_t tableGenListRecordNumElements(TableGenTypedInitRef rv_ref);
 
 // LLVM DagType
+TableGenRecordRef tableGenDagRecordOperator(TableGenTypedInitRef rv_ref);
 TableGenTypedInitRef tableGenDagRecordGet(TableGenTypedInitRef rv_ref,
                                           size_t index);
-TableGenStringRef tableGenDagRecordArgName(TableGenTypedInitRef rv_ref, size_t index);
+TableGenStringRef tableGenDagRecordArgName(TableGenTypedInitRef rv_ref,
+                                           size_t index);
 size_t tableGenDagRecordNumArgs(TableGenTypedInitRef rv_ref);
 
 // Utility
@@ -133,7 +140,8 @@ TableGenRecTyKind tableGenInitRecType(TableGenTypedInitRef ti);
 TableGenBool tableGenBitInitGetValue(TableGenTypedInitRef ti, int8_t *bit);
 int8_t *tableGenBitsInitGetValue(TableGenTypedInitRef ti, size_t *len);
 TableGenBool tableGenBitsInitGetNumBits(TableGenTypedInitRef ti, size_t *len);
-TableGenTypedInitRef tableGenBitsInitGetBitInit(TableGenTypedInitRef ti, size_t index);
+TableGenTypedInitRef tableGenBitsInitGetBitInit(TableGenTypedInitRef ti,
+                                                size_t index);
 TableGenBool tableGenIntInitGetValue(TableGenTypedInitRef ti, int64_t *integer);
 TableGenStringRef tableGenStringInitGetValue(TableGenTypedInitRef ti);
 char *tableGenStringInitGetValueNewString(TableGenTypedInitRef ti);

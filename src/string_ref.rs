@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, os::unix::prelude::OsStrExt, path::Path};
 
 use crate::raw::TableGenStringRef;
 

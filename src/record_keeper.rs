@@ -213,7 +213,6 @@ mod test {
                 class A;
                 class B;
                 class C;
-
                 def D1: A;
                 def D2: B;
                 def D3: C;
@@ -222,11 +221,8 @@ mod test {
             .unwrap()
             .parse()
             .expect("valid tablegen");
-        rk.classes().for_each(|i| {
-            println!("{:#?}", i.1.name());
-            println!("{:#?}", i.0);
-            assert!(i.1.name().unwrap() == i.0.unwrap())
-        });
+        rk.classes()
+            .for_each(|i| assert!(i.1.name().unwrap() == i.0.unwrap()));
         rk.defs()
             .for_each(|i| assert!(i.1.name().unwrap() == i.0.unwrap()));
         assert!(rk.classes().map(|i| i.0.unwrap()).eq(["A", "B", "C"]));

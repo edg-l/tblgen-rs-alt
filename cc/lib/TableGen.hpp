@@ -36,7 +36,7 @@ typedef std::pair<std::string, TypedInit *> DagPair;
 class TableGenParser {
 public:
   TableGenParser() {}
-  bool addSource(const StringRef source);
+  bool addSource(const char *source);
   bool addSourceFile(const StringRef source);
   void addIncludePath(const StringRef include);
   RecordKeeper *parse();

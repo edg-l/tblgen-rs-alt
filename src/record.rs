@@ -20,7 +20,7 @@ use crate::raw::{
 use crate::RecordKeeper;
 
 use crate::error::TableGenError;
-use crate::init::{BitInit, BitsInit, DagInit, DefInit, IntInit, ListInit, StringInit, TypedInit};
+use crate::init::{BitInit, DagInit, ListInit, StringInit, TypedInit};
 use crate::string_ref::StringRef;
 
 /// An immutable reference to a TableGen record.
@@ -37,7 +37,7 @@ macro_rules! record_value {
     ($(#[$attr:meta])* $name:ident, $type:ty) => {
         paste! {
             $(#[$attr])*
-            pub fn [<$name _value>](&self, name: &str) -> Option<$type> {
+            pub fn [<$name _value>](self, name: &str) -> Option<$type> {
                 self.value(name)?.try_into().ok()
             }
         }
@@ -68,25 +68,25 @@ impl<'a> Record<'a> {
 
     record_value!(
         /// Returns the boolean value of the field with the given name if this
-        /// field is of type [`BitInit`].
+        /// field is of type [`BitInit`](crate::init::BitInit).
         bit,
         bool
     );
     record_value!(
         /// Returns the field with the given name converted to a [`Vec<bool>`]
-        /// if this field is of type [`BitsInit`].
+        /// if this field is of type [`BitsInit`](crate::init::BitsInit).
         bits,
         Vec<bool>
     );
     record_value!(
         /// Returns the integer value of the field with the given name if this
-        /// field is of type [`IntInit`].
+        /// field is of type [`IntInit`](crate::init::IntInit).
         int,
         i64
     );
     record_value!(
         /// Returns the field with the given name converted to a [`String`]
-        /// if this field is of type [`StringInit`].
+        /// if this field is of type [`StringInit`](crate::init::StringInit).
         ///
         /// Note that this copies the string into a new string.
         code,
@@ -94,13 +94,13 @@ impl<'a> Record<'a> {
     );
     record_value!(
         /// Returns the field with the given name converted to a [`&str`]
-        /// if this field is of type [`StringInit`].
+        /// if this field is of type [`StringInit`](crate::init::StringInit).
         code_str,
         &str
     );
     record_value!(
         /// Returns the field with the given name converted to a [`String`]
-        /// if this field is of type [`StringInit`].
+        /// if this field is of type [`StringInit`](crate::init::StringInit).
         ///
         /// Note that this copies the string into a new string.
         string,
@@ -108,13 +108,13 @@ impl<'a> Record<'a> {
     );
     record_value!(
         /// Returns the field with the given name converted to a [`&str`]
-        /// if this field is of type [`StringInit`].
+        /// if this field is of type [`StringInit`](crate::init::StringInit).
         str,
         &str
     );
     record_value!(
         /// Returns the field with the given name converted to a [`Record`]
-        /// if this field is of type [`DefInit`].
+        /// if this field is of type [`DefInit`](crate::init::DefInit).
         def,
         Record
     );
@@ -132,7 +132,7 @@ impl<'a> Record<'a> {
     );
 
     /// Returns a [`RecordValue`] for the field with the given name.
-    pub fn value(&self, name: &str) -> Option<RecordValue> {
+    pub fn value(self, name: &str) -> Option<RecordValue> {
         unsafe {
             let value = tableGenRecordGetValue(self.raw, StringRef::from(name).to_raw());
             if !value.is_null() {
@@ -144,13 +144,13 @@ impl<'a> Record<'a> {
     }
 
     /// Returns true if the record is anonymous.
-    pub fn anonymous(&self) -> bool {
+    pub fn anonymous(self) -> bool {
         unsafe { tableGenRecordIsAnonymous(self.raw) > 0 }
     }
 
     /// Returns true if the record is a subclass of the class with the given
     /// name.
-    pub fn subclass_of(&self, class: &str) -> bool {
+    pub fn subclass_of(self, class: &str) -> bool {
         unsafe { tableGenRecordIsSubclassOf(self.raw, StringRef::from(class).to_raw()) > 0 }
     }
 
@@ -212,6 +212,7 @@ impl<'a> RecordValue<'a> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct RecordValueIter<'a> {
     record: TableGenRecordRef,
     current: TableGenRecordValRef,
@@ -234,12 +235,110 @@ impl<'a> Iterator for RecordValueIter<'a> {
     type Item = RecordValue<'a>;
 
     fn next(&mut self) -> Option<RecordValue<'a>> {
-        let next = unsafe { tableGenRecordValNext(self.record, self.current) };
-        self.current = next;
-        if next.is_null() {
+        let res = if self.current.is_null() {
             None
         } else {
-            unsafe { Some(RecordValue::from_raw(next)) }
+            unsafe { Some(RecordValue::from_raw(self.current)) }
+        };
+        self.current = unsafe { tableGenRecordValNext(self.record, self.current) };
+        res
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::TableGenParser;
+
+    #[test]
+    fn record() {
+        let rk = TableGenParser::new()
+            .add_source(
+                r#"
+                class A;
+                class B;
+                class C;
+
+                def D1: A;
+                def D2: A, B;
+                def : B, C;
+                "#,
+            )
+            .unwrap()
+            .parse()
+            .expect("valid tablegen");
+        let d2 = rk.def("D2").expect("D2 exists");
+        assert!(d2.subclass_of("A"));
+        assert!(d2.subclass_of("B"));
+        assert!(!d2.subclass_of("C"));
+        assert!(!d2.subclass_of("D"));
+        let anon = rk
+            .defs()
+            .map(|(_name, def)| def)
+            .filter(|d| d.anonymous())
+            .next()
+            .expect("anonymous class exists");
+        assert!(!anon.subclass_of("A"));
+        assert!(anon.subclass_of("B"));
+        assert!(anon.subclass_of("C"));
+    }
+
+    #[test]
+    fn single_value() {
+        let rk = TableGenParser::new()
+            .add_source(
+                r#"
+                def A {
+                    int size = 42;
+                }
+                "#,
+            )
+            .unwrap()
+            .parse()
+            .expect("valid tablegen");
+        let a = rk.def("A").expect("def A exists");
+        assert_eq!(a.name(), Ok("A"));
+        assert_eq!(a.int_value("size"), Some(42));
+        assert_eq!(
+            a.value("size")
+                .and_then(|v| {
+                    assert!(v.name.to_str() == Ok("size"));
+                    v.init.as_int()
+                })
+                .map(|i| i.into()),
+            Some(42)
+        );
+    }
+
+    #[test]
+    fn values() {
+        let rk = TableGenParser::new()
+            .add_source(
+                r#"
+                def A {
+                    int a = 5;
+                    string n = "hello";
+                }
+                "#,
+            )
+            .unwrap()
+            .parse()
+            .expect("valid tablegen");
+        let a = rk.def("A").expect("def A exists");
+        let values = a.values();
+        assert_eq!(values.clone().count(), 2);
+        for v in values {
+            match v.init {
+                TypedInit::Int(i) => {
+                    assert_eq!(v.name.to_str(), Ok("a"));
+                    assert_eq!(i64::from(i), 5);
+                }
+                TypedInit::String(i) => {
+                    assert_eq!(v.name.to_str(), Ok("n"));
+                    assert_eq!(i.to_str(), Ok("hello"));
+                }
+                _ => panic!("unexpected type"),
+            }
         }
     }
 }

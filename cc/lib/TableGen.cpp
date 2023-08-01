@@ -11,6 +11,7 @@
 #include "TableGen.hpp"
 #include "TableGen.h"
 #include "Types.h"
+#include <cstring>
 
 using ctablegen::RecordMap;
 using ctablegen::tableGenFromRecType;
@@ -30,7 +31,7 @@ void ctablegen::TableGenParser::addIncludePath(const StringRef include) {
   includeDirs.push_back(std::string(include));
 }
 
-bool ctablegen::TableGenParser::addSource(const StringRef source) {
+bool ctablegen::TableGenParser::addSource(const char *source) {
   ErrorOr<std::unique_ptr<MemoryBuffer>> FileOrErr =
       MemoryBuffer::getMemBuffer(source);
 
@@ -60,16 +61,18 @@ TableGenParserRef tableGenGet() {
 
 void tableGenFree(TableGenParserRef tg_ref) { delete unwrap(tg_ref); }
 
+TableGenBool tableGenAddSourceFile(TableGenParserRef tg_ref,
+                                   TableGenStringRef source) {
+  return unwrap(tg_ref)->addSourceFile(StringRef(source.data, source.len));
+}
+
 TableGenBool tableGenAddSource(TableGenParserRef tg_ref, const char *source) {
   return unwrap(tg_ref)->addSource(source);
 }
 
-TableGenBool tableGenAddSourceFile(TableGenParserRef tg_ref, const char *source) {
-  return unwrap(tg_ref)->addSourceFile(source);
-}
-
-void tableGenAddIncludePath(TableGenParserRef tg_ref, const char *include) {
-  return unwrap(tg_ref)->addIncludePath(include);
+void tableGenAddIncludePath(TableGenParserRef tg_ref,
+                            TableGenStringRef include) {
+  return unwrap(tg_ref)->addIncludePath(StringRef(include.data, include.len));
 }
 
 TableGenRecordKeeperRef tableGenParse(TableGenParserRef tg_ref) {
@@ -131,15 +134,22 @@ size_t tableGenDagRecordNumArgs(TableGenTypedInitRef rv_ref) {
   return dag->getNumArgs();
 }
 
-TableGenStringRef tableGenDagRecordArgName(TableGenTypedInitRef rv_ref,
-                                     size_t index) {
+TableGenRecordRef tableGenDagRecordOperator(TableGenTypedInitRef rv_ref) {
   auto dag = dyn_cast<DagInit>(unwrap(rv_ref));
   if (!dag)
-    return TableGenStringRef { .data = nullptr, .len = 0 };
+    return 0;
+  return wrap(dag->getOperatorAsDef(SMLoc()));
+}
+
+TableGenStringRef tableGenDagRecordArgName(TableGenTypedInitRef rv_ref,
+                                           size_t index) {
+  auto dag = dyn_cast<DagInit>(unwrap(rv_ref));
+  if (!dag)
+    return TableGenStringRef{.data = nullptr, .len = 0};
   if (index >= dag->getNumArgs())
-    return TableGenStringRef { .data = nullptr, .len = 0 };
+    return TableGenStringRef{.data = nullptr, .len = 0};
   auto s = dag->getArgNameStr(index);
-  return TableGenStringRef { .data = s.data(), .len = s.size() };
+  return TableGenStringRef{.data = s.data(), .len = s.size()};
 }
 
 // Memory

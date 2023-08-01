@@ -85,7 +85,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         .cpp(true)
         .include("cc/include")
         .include(llvm_config("--includedir")?)
-        .flag("-MJcompile_commands.o.json")
+        // .flag("-MJcompile_commands.o.json")
         .opt_level(3)
         .compile("CTableGen");
 

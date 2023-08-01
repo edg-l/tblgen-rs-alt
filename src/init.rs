@@ -19,9 +19,9 @@ use crate::{
     raw::{
         tableGenBitInitGetValue, tableGenBitsInitGetBitInit, tableGenBitsInitGetNumBits,
         tableGenDagRecordArgName, tableGenDagRecordGet, tableGenDagRecordNumArgs,
-        tableGenDefInitGetValue, tableGenInitRecType, tableGenIntInitGetValue,
-        tableGenListRecordGet, tableGenListRecordNumElements, tableGenStringInitGetValue,
-        TableGenRecTyKind, TableGenTypedInitRef,
+        tableGenDagRecordOperator, tableGenDefInitGetValue, tableGenInitRecType,
+        tableGenIntInitGetValue, tableGenListRecordGet, tableGenListRecordNumElements,
+        tableGenStringInitGetValue, TableGenRecTyKind, TableGenRecordRef, TableGenTypedInitRef,
     },
     string_ref::StringRef,
 };
@@ -252,16 +252,20 @@ impl<'a> DagInit<'a> {
         }
     }
 
-    pub fn num_args(&self) -> usize {
+    pub fn operator(self) -> Record<'a> {
+        unsafe { Record::from_raw(tableGenDagRecordOperator(self.raw)) }
+    }
+
+    pub fn num_args(self) -> usize {
         unsafe { tableGenDagRecordNumArgs(self.raw) }
     }
 
-    pub fn name(&self, index: usize) -> Option<&'a str> {
+    pub fn name(self, index: usize) -> Option<&'a str> {
         unsafe { StringRef::from_option_raw(tableGenDagRecordArgName(self.raw, index)) }
             .and_then(|s| s.try_into().ok())
     }
 
-    pub fn get(&self, index: usize) -> Option<TypedInit<'a>> {
+    pub fn get(self, index: usize) -> Option<TypedInit<'a>> {
         let value = unsafe { tableGenDagRecordGet(self.raw, index) };
         if !value.is_null() {
             Some(unsafe { TypedInit::from_raw(value) })
@@ -270,7 +274,7 @@ impl<'a> DagInit<'a> {
         }
     }
 
-    pub unsafe fn get_unchecked(&self, index: usize) -> TypedInit<'a> {
+    pub unsafe fn get_unchecked(self, index: usize) -> TypedInit<'a> {
         TypedInit::from_raw(tableGenDagRecordGet(self.raw, index))
     }
 }
@@ -306,11 +310,11 @@ impl<'a> ListInit<'a> {
         }
     }
 
-    pub fn len(&self) -> usize {
+    pub fn len(self) -> usize {
         unsafe { tableGenListRecordNumElements(self.raw) }
     }
 
-    pub fn get(&self, index: usize) -> Option<TypedInit> {
+    pub fn get(self, index: usize) -> Option<TypedInit<'a>> {
         let value = unsafe { tableGenListRecordGet(self.raw, index) };
         if !value.is_null() {
             Some(unsafe { TypedInit::from_raw(value) })
@@ -319,7 +323,7 @@ impl<'a> ListInit<'a> {
         }
     }
 
-    pub unsafe fn get_unchecked(&self, index: usize) -> TypedInit {
+    pub unsafe fn get_unchecked(self, index: usize) -> TypedInit<'a> {
         TypedInit::from_raw(tableGenListRecordGet(self.raw, index))
     }
 }
@@ -341,5 +345,121 @@ impl<'a> Iterator for ListIter<'a> {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::TableGenParser;
+
+    macro_rules! test_init {
+        ($name:ident, $td_field:expr, $expected:expr) => {
+            #[test]
+            fn $name() {
+                let rk = TableGenParser::new()
+                    .add_source(&format!(
+                        "
+                    def A {{
+                        {}
+                    }}
+                    ",
+                        $td_field
+                    ))
+                    .unwrap()
+                    .parse()
+                    .expect("valid tablegen");
+                let a = rk
+                    .def("A")
+                    .expect("def A exists")
+                    .value("a")
+                    .expect("field a exists");
+                assert_eq!(a.init.try_into(), Ok($expected));
+            }
+        };
+    }
+
+    test_init!(bit, "bit a = 0;", false);
+    test_init!(
+        bits,
+        "bits<4> a = { 0, 0, 1, 0 };",
+        vec![false, true, false, false]
+    );
+    test_init!(int, "int a = 42;", 42);
+    test_init!(string, "string a = \"hi\";", "hi");
+
+    #[test]
+    fn dag() {
+        let rk = TableGenParser::new()
+            .add_source(
+                "
+                def ins;
+                def X {
+                    int i = 4;
+                }
+                def Y {
+                    string s = \"test\";
+                }
+                def A {
+                    dag args = (ins X:$src1, Y:$src2);
+                }
+                ",
+            )
+            .unwrap()
+            .parse()
+            .expect("valid tablegen");
+        let a: DagInit = rk
+            .def("A")
+            .expect("def A exists")
+            .value("args")
+            .expect("field args exists")
+            .try_into()
+            .expect("is dag init");
+        assert_eq!(a.num_args(), 2);
+        assert_eq!(a.operator().name(), Ok("ins"));
+        let args = a.args();
+        assert_eq!(
+            args.clone().next().map(|(name, init)| (
+                name,
+                Record::try_from(init).expect("is record").int_value("i")
+            )),
+            Some(("src1", Some(4)))
+        );
+        assert_eq!(
+            args.skip(1).next().map(|(name, init)| (
+                name,
+                Record::try_from(init).expect("is record").string_value("s")
+            )),
+            Some(("src2", Some("test".into())))
+        );
+    }
+
+    #[test]
+    fn list() {
+        let rk = TableGenParser::new()
+            .add_source(
+                "
+                def A {
+                    list<int> l = [0, 1, 2, 3];
+                }
+                ",
+            )
+            .unwrap()
+            .parse()
+            .expect("valid tablegen");
+        let l: ListInit = rk
+            .def("A")
+            .expect("def A exists")
+            .value("l")
+            .expect("field args exists")
+            .try_into()
+            .expect("is list init");
+        assert_eq!(l.len(), 4);
+        let iter = l.iter();
+        assert_eq!(iter.clone().count(), 4);
+        assert_eq!(iter.clone().skip(0).next().unwrap().try_into(), Ok(0));
+        assert_eq!(iter.clone().skip(1).next().unwrap().try_into(), Ok(1));
+        assert_eq!(iter.clone().skip(2).next().unwrap().try_into(), Ok(2));
+        assert_eq!(iter.clone().skip(3).next().unwrap().try_into(), Ok(3));
     }
 }
