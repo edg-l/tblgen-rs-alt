@@ -126,6 +126,12 @@ pub struct TableGenParser<'s> {
     _source_ref: PhantomData<&'s str>,
 }
 
+impl<'s> Default for TableGenParser<'s> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'s> TableGenParser<'s> {
     /// Initalizes a new TableGen parser.
     pub fn new() -> Self {

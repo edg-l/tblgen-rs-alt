@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, os::unix::prelude::OsStrExt, path::Path};
+use std::marker::PhantomData;
 
 use crate::raw::TableGenStringRef;
 
@@ -44,7 +44,6 @@ impl<'a> TryFrom<StringRef<'a>> for &'a str {
     type Error = std::str::Utf8Error;
 
     fn try_from(value: StringRef<'a>) -> Result<Self, Self::Error> {
-        println!("{:#?}", value);
         std::str::from_utf8(value.into())
     }
 }

@@ -29,9 +29,9 @@ fn run() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=wrapper.h");
     println!("cargo:rerun-if-changed=cc");
     println!("cargo:rustc-link-search={}", llvm_config("--libdir")?);
-    println!("cargo:rustc-link-lib=static={}", "LLVMCore");
-    println!("cargo:rustc-link-lib=static={}", "LLVMSupport");
-    println!("cargo:rustc-link-lib=static={}", "LLVMTableGen");
+    println!("cargo:rustc-link-lib=static=LLVMCore");
+    println!("cargo:rustc-link-lib=static=LLVMSupport");
+    println!("cargo:rustc-link-lib=static=LLVMTableGen");
 
     for name in llvm_config("--libnames")?.trim().split(' ') {
         if let Some(name) = trim_library_name(name) {
@@ -77,7 +77,6 @@ fn run() -> Result<(), Box<dyn Error>> {
     cc::Build::new()
         .files(
             std::fs::read_dir("cc/lib")?
-                .into_iter()
                 .filter(|r| r.is_ok())
                 .map(|r| r.unwrap().path())
                 .filter(|r| r.is_file() && r.extension().unwrap() == "cpp"),
@@ -89,7 +88,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         .opt_level(3)
         .compile("CTableGen");
 
-    println!("cargo:rustc-link-lib=static={}", "CTableGen");
+    println!("cargo:rustc-link-lib=static=CTableGen");
 
     bindgen::builder()
         .header("wrapper.h")

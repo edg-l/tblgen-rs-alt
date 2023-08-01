@@ -62,7 +62,7 @@ impl<'a> Record<'a> {
     /// # Errors
     ///
     /// Returns a [`Utf8Error`] if the name is not a valid UTF-8 string.
-    pub fn name(&self) -> Result<&str, Utf8Error> {
+    pub fn name(self) -> Result<&'a str, Utf8Error> {
         unsafe { StringRef::from_raw(tableGenRecordGetName(self.raw)) }.try_into()
     }
 
@@ -168,7 +168,7 @@ macro_rules! try_into {
             type Error = TableGenError;
 
             fn try_from(record_value: RecordValue<'a>) -> Result<Self, Self::Error> {
-                Ok(record_value.init.try_into()?)
+                record_value.init.try_into()
             }
         }
     };
@@ -275,8 +275,7 @@ mod tests {
         let anon = rk
             .defs()
             .map(|(_name, def)| def)
-            .filter(|d| d.anonymous())
-            .next()
+            .find(|d| d.anonymous())
             .expect("anonymous class exists");
         assert!(!anon.subclass_of("A"));
         assert!(anon.subclass_of("B"));

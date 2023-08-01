@@ -21,14 +21,14 @@ use crate::{
         tableGenDagRecordArgName, tableGenDagRecordGet, tableGenDagRecordNumArgs,
         tableGenDagRecordOperator, tableGenDefInitGetValue, tableGenInitRecType,
         tableGenIntInitGetValue, tableGenListRecordGet, tableGenListRecordNumElements,
-        tableGenStringInitGetValue, TableGenRecTyKind, TableGenRecordRef, TableGenTypedInitRef,
+        tableGenStringInitGetValue, TableGenRecTyKind, TableGenTypedInitRef,
     },
     string_ref::StringRef,
 };
 use paste::paste;
 
 use crate::{error::TableGenError, record::Record};
-use std::marker::PhantomData;
+use std::{marker::PhantomData, str::Utf8Error};
 
 /// Enum that holds a reference to a `TypedInit`.
 #[derive(Debug, Clone, Copy)]
@@ -112,6 +112,11 @@ impl<'a> TypedInit<'a> {
     as_inner!(dag, Dag, DagInit);
     as_inner!(def, Def, DefInit);
 
+    /// Creates a new init from a raw object.
+    ///
+    /// # Safety
+    ///
+    /// The raw object must be valid.
     #[allow(non_upper_case_globals)]
     pub unsafe fn from_raw(init: TableGenTypedInitRef) -> Self {
         let t = tableGenInitRecType(init);
@@ -139,7 +144,12 @@ macro_rules! init {
         }
 
         impl<'a> $name<'a> {
-            pub fn from_raw(raw: TableGenTypedInitRef) -> Self {
+            /// Creates a new init from a raw object.
+            ///
+            /// # Safety
+            ///
+            /// The raw object must be valid.
+            pub unsafe fn from_raw(raw: TableGenTypedInitRef) -> Self {
                 Self {
                     raw,
                     _reference: PhantomData,
@@ -179,15 +189,17 @@ impl<'a> From<BitsInit<'a>> for Vec<bool> {
 }
 
 impl<'a> BitsInit<'a> {
+    /// Returns the bit at the given index.
     pub fn bit(self, index: usize) -> Option<BitInit<'a>> {
         let bit = unsafe { tableGenBitsInitGetBitInit(self.raw, index) };
         if !bit.is_null() {
-            Some(BitInit::from_raw(bit))
+            Some(unsafe { BitInit::from_raw(bit) })
         } else {
             None
         }
     }
 
+    /// Returns the number of bits in the init.
     pub fn num_bits(self) -> usize {
         let mut len = 0;
         unsafe { tableGenBitsInitGetNumBits(self.raw, &mut len) };
@@ -217,18 +229,24 @@ impl<'a> TryFrom<StringInit<'a>> for String {
 }
 
 impl<'a> TryFrom<StringInit<'a>> for &'a str {
-    type Error = std::str::Utf8Error;
+    type Error = Utf8Error;
 
-    fn try_from(value: StringInit<'a>) -> Result<Self, std::str::Utf8Error> {
+    fn try_from(value: StringInit<'a>) -> Result<Self, Utf8Error> {
         value.to_str()
     }
 }
 
 impl<'a> StringInit<'a> {
-    pub fn to_str(self) -> Result<&'a str, std::str::Utf8Error> {
+    /// Converts the string init to a [`&str`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`Utf8Error`] if the string init does not contain valid UTF-8.
+    pub fn to_str(self) -> Result<&'a str, Utf8Error> {
         unsafe { StringRef::from_raw(tableGenStringInitGetValue(self.raw)) }.try_into()
     }
 
+    /// Gets the string init as a slice of bytes.
     pub fn as_bytes(self) -> &'a [u8] {
         unsafe { StringRef::from_raw(tableGenStringInitGetValue(self.raw)) }.into()
     }
@@ -245,6 +263,9 @@ impl<'a> From<DefInit<'a>> for Record<'a> {
 init!(DagInit);
 
 impl<'a> DagInit<'a> {
+    /// Returns an iterator over the arguments of the dag.
+    ///
+    /// The iterator yields tuples `(&str, TypedInit)`.
     pub fn args(self) -> DagIter<'a> {
         DagIter {
             dag: self,
@@ -252,19 +273,23 @@ impl<'a> DagInit<'a> {
         }
     }
 
+    /// Returns the operator of the dag as a [`Record`].
     pub fn operator(self) -> Record<'a> {
         unsafe { Record::from_raw(tableGenDagRecordOperator(self.raw)) }
     }
 
+    /// Returns the number of arguments for this dag.
     pub fn num_args(self) -> usize {
         unsafe { tableGenDagRecordNumArgs(self.raw) }
     }
 
+    /// Returns the name of the argument at the given index.
     pub fn name(self, index: usize) -> Option<&'a str> {
         unsafe { StringRef::from_option_raw(tableGenDagRecordArgName(self.raw, index)) }
             .and_then(|s| s.try_into().ok())
     }
 
+    /// Returns the argument at the given index.
     pub fn get(self, index: usize) -> Option<TypedInit<'a>> {
         let value = unsafe { tableGenDagRecordGet(self.raw, index) };
         if !value.is_null() {
@@ -272,10 +297,6 @@ impl<'a> DagInit<'a> {
         } else {
             None
         }
-    }
-
-    pub unsafe fn get_unchecked(self, index: usize) -> TypedInit<'a> {
-        TypedInit::from_raw(tableGenDagRecordGet(self.raw, index))
     }
 }
 
@@ -292,8 +313,8 @@ impl<'a> Iterator for DagIter<'a> {
         let next = self.dag.get(self.index);
         let name = self.dag.name(self.index);
         self.index += 1;
-        if next.is_some() && name.is_some() {
-            Some((name.unwrap(), next.unwrap()))
+        if let (Some(next), Some(name)) = (next, name) {
+            Some((name, next))
         } else {
             None
         }
@@ -303,6 +324,9 @@ impl<'a> Iterator for DagIter<'a> {
 init!(ListInit);
 
 impl<'a> ListInit<'a> {
+    /// Returns an iterator over the elements of the list.
+    ///
+    /// The iterator yields values of type [`TypedInit`].
     pub fn iter(self) -> ListIter<'a> {
         ListIter {
             list: self,
@@ -310,10 +334,17 @@ impl<'a> ListInit<'a> {
         }
     }
 
+    /// Returns true if the list is empty.
+    pub fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns the length of the list.
     pub fn len(self) -> usize {
         unsafe { tableGenListRecordNumElements(self.raw) }
     }
 
+    /// Returns the element at the given index in the list.
     pub fn get(self, index: usize) -> Option<TypedInit<'a>> {
         let value = unsafe { tableGenListRecordGet(self.raw, index) };
         if !value.is_null() {
@@ -321,10 +352,6 @@ impl<'a> ListInit<'a> {
         } else {
             None
         }
-    }
-
-    pub unsafe fn get_unchecked(self, index: usize) -> TypedInit<'a> {
-        TypedInit::from_raw(tableGenListRecordGet(self.raw, index))
     }
 }
 
@@ -457,9 +484,9 @@ mod tests {
         assert_eq!(l.len(), 4);
         let iter = l.iter();
         assert_eq!(iter.clone().count(), 4);
-        assert_eq!(iter.clone().skip(0).next().unwrap().try_into(), Ok(0));
-        assert_eq!(iter.clone().skip(1).next().unwrap().try_into(), Ok(1));
-        assert_eq!(iter.clone().skip(2).next().unwrap().try_into(), Ok(2));
-        assert_eq!(iter.clone().skip(3).next().unwrap().try_into(), Ok(3));
+        assert_eq!(iter.clone().nth(0).unwrap().try_into(), Ok(0));
+        assert_eq!(iter.clone().nth(1).unwrap().try_into(), Ok(1));
+        assert_eq!(iter.clone().nth(2).unwrap().try_into(), Ok(2));
+        assert_eq!(iter.clone().nth(3).unwrap().try_into(), Ok(3));
     }
 }
