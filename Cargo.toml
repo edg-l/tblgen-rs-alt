@@ -6,7 +6,7 @@ license = "MIT OR Apache-2.0"
 description = "Safe Rust bindings for TableGen."
 repository = "https://gitlab.com/Danacus/tblgen-rs"
 documentation = "https://danacus.gitlab.io/tblgen-rs/tblgen/"
-exclude = "doc/"
+exclude = ["doc/"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
