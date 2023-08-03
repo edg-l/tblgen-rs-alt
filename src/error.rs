@@ -8,11 +8,9 @@
 // except according to those terms.
 
 use std::{
-    convert::Infallible,
     error::Error,
     ffi::{c_void, NulError},
     fmt::{self, Display, Formatter},
-    marker::PhantomData,
     str::Utf8Error,
 };
 
@@ -23,7 +21,7 @@ use crate::{
     },
     string_ref::StringRef,
     util::print_callback,
-    RecordValue, TableGenParser, TypedInit,
+    TableGenParser, TypedInit,
 };
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
@@ -69,11 +67,11 @@ impl<'a> InitConversionError<'a> {
     }
 
     pub fn target_type(&self) -> &str {
-        &self.target
+        self.target
     }
 
     pub fn inner_error(&self) -> Option<&str> {
-        self.error.as_ref().map(|s| s.as_str())
+        self.error.as_deref()
     }
 }
 

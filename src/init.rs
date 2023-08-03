@@ -152,7 +152,7 @@ impl<'a> TryFrom<TypedInit<'a>> for String {
                 None,
             )),
         }
-        .map_err(|e| TableGenError::from(e))
+        .map_err(TableGenError::from)
     }
 }
 
@@ -174,7 +174,7 @@ impl<'a> TryFrom<TypedInit<'a>> for &'a str {
                 None,
             )),
         }
-        .map_err(|e| TableGenError::from(e))
+        .map_err(TableGenError::from)
     }
 }
 
@@ -549,7 +549,7 @@ mod tests {
             .expect("is dag init");
         assert_eq!(a.num_args(), 2);
         assert_eq!(a.operator().name(), Ok("ins"));
-        let args = a.args();
+        let mut args = a.args();
         assert_eq!(
             args.clone().next().map(|(name, init)| (
                 name,
@@ -558,7 +558,7 @@ mod tests {
             Some(("src1", Ok(4)))
         );
         assert_eq!(
-            args.skip(1).next().map(|(name, init)| (
+            args.nth(1).map(|(name, init)| (
                 name,
                 Record::try_from(init).expect("is record").string_value("s")
             )),
@@ -589,7 +589,7 @@ mod tests {
         assert_eq!(l.len(), 4);
         let iter = l.iter();
         assert_eq!(iter.clone().count(), 4);
-        assert_eq!(iter.clone().nth(0).unwrap().try_into(), Ok(0));
+        assert_eq!(iter.clone().next().unwrap().try_into(), Ok(0));
         assert_eq!(iter.clone().nth(1).unwrap().try_into(), Ok(1));
         assert_eq!(iter.clone().nth(2).unwrap().try_into(), Ok(2));
         assert_eq!(iter.clone().nth(3).unwrap().try_into(), Ok(3));

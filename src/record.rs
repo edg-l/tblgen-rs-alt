@@ -10,7 +10,6 @@
 
 use paste::paste;
 use std::ffi::c_void;
-use std::str::Utf8Error;
 
 use crate::raw::{
     tableGenRecordGetFirstValue, tableGenRecordGetLoc, tableGenRecordGetName,
@@ -93,7 +92,7 @@ impl<'a> Record<'a> {
     pub fn name(self) -> Result<&'a str, SourceError<'a, TableGenError<'a>>> {
         unsafe { StringRef::from_raw(tableGenRecordGetName(self.raw)) }
             .try_into()
-            .map_err(|e: Utf8Error| TableGenError::from(e))
+            .map_err(TableGenError::from)
             .map_err(|e| e.with_location(self))
     }
 
