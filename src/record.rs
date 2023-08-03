@@ -10,18 +10,21 @@
 
 use paste::paste;
 use std::ffi::c_void;
-use std::marker::PhantomData;
 use std::str::Utf8Error;
 
 use crate::raw::{
-    tableGenRecordGetFirstValue, tableGenRecordGetName, tableGenRecordGetValue,
-    tableGenRecordIsAnonymous, tableGenRecordIsSubclassOf, tableGenRecordPrint,
-    tableGenRecordValGetNameInit, tableGenRecordValGetValue, tableGenRecordValNext,
-    tableGenRecordValPrint, TableGenRecordRef, TableGenRecordValRef,
+    tableGenRecordGetFirstValue, tableGenRecordGetLoc, tableGenRecordGetName,
+    tableGenRecordGetValue, tableGenRecordIsAnonymous, tableGenRecordIsSubclassOf,
+    tableGenRecordPrint, tableGenRecordValGetLoc, tableGenRecordValGetNameInit,
+    tableGenRecordValGetValue, tableGenRecordValNext, tableGenRecordValPrint, TableGenRecordRef,
+    TableGenRecordValRef,
 };
 use crate::RecordKeeper;
 
-use crate::error::TableGenError;
+use crate::error::{
+    MissingOrInvalidValueError, MissingValueError, RecordValueConversionError, SourceError,
+    SourceLoc, SourceLocation, WithLocation,
+};
 use crate::init::{BitInit, DagInit, ListInit, StringInit, TypedInit};
 use crate::string_ref::StringRef;
 use crate::util::print_callback;
@@ -34,7 +37,7 @@ use std::fmt::{self, Debug, Display, Formatter};
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Record<'a> {
     raw: TableGenRecordRef,
-    _reference: PhantomData<&'a RecordKeeper>,
+    keeper: &'a RecordKeeper<'a>,
 }
 
 impl<'a> Display for Record<'a> {
@@ -65,8 +68,11 @@ macro_rules! record_value {
     ($(#[$attr:meta])* $name:ident, $type:ty) => {
         paste! {
             $(#[$attr])*
-            pub fn [<$name _value>](self, name: &str) -> Option<$type> {
-                self.value(name)?.try_into().ok()
+            pub fn [<$name _value>]<'n>(self, name: &'n str) -> Result<
+                $type,
+                SourceError<'a, MissingOrInvalidValueError<'a, <$type as TryFrom<TypedInit<'a>>>::Error>>
+            > {
+                self.value(name).map_err(|e| e.map(|e| MissingOrInvalidValueError::from(e)))?.try_into().map_err(|e: SourceError<'a, _>| e.map(|e| MissingOrInvalidValueError::from(e)))
             }
         }
     };
@@ -78,20 +84,19 @@ impl<'a> Record<'a> {
     /// # Safety
     ///
     /// The raw object must be valid.
-    pub unsafe fn from_raw(ptr: TableGenRecordRef) -> Record<'a> {
-        Record {
-            raw: ptr,
-            _reference: PhantomData,
-        }
+    pub unsafe fn from_raw(keeper: &'a RecordKeeper, ptr: TableGenRecordRef) -> Record<'a> {
+        Record { raw: ptr, keeper }
     }
 
     /// Returns the name of the record.
     ///
     /// # Errors
     ///
-    /// Returns a [`Utf8Error`] if the name is not a valid UTF-8 string.
-    pub fn name(self) -> Result<&'a str, Utf8Error> {
-        unsafe { StringRef::from_raw(tableGenRecordGetName(self.raw)) }.try_into()
+    /// Returns an error if the name is not a valid UTF-8 string.
+    pub fn name(self) -> Result<&'a str, SourceError<'a, Utf8Error>> {
+        unsafe { StringRef::from_raw(tableGenRecordGetName(self.raw)) }
+            .try_into()
+            .map_err(|e: Utf8Error| e.with_location(self))
     }
 
     record_value!(
@@ -124,7 +129,7 @@ impl<'a> Record<'a> {
         /// Returns the field with the given name converted to a [`&str`]
         /// if this field is of type [`StringInit`](crate::init::StringInit).
         code_str,
-        &str
+        &'a str
     );
     record_value!(
         /// Returns the field with the given name converted to a [`String`]
@@ -138,35 +143,38 @@ impl<'a> Record<'a> {
         /// Returns the field with the given name converted to a [`&str`]
         /// if this field is of type [`StringInit`](crate::init::StringInit).
         str,
-        &str
+        &'a str
     );
     record_value!(
         /// Returns the field with the given name converted to a [`Record`]
         /// if this field is of type [`DefInit`](crate::init::DefInit).
         def,
-        Record
+        Record<'a>
     );
     record_value!(
         /// Returns the field with the given name converted to a [`ListInit`]
         /// if this field is of type [`ListInit`].
         list,
-        ListInit
+        ListInit<'a>
     );
     record_value!(
         /// Returns the field with the given name converted to a [`DagInit`]
         /// if this field is of type [`DagInit`].
         dag,
-        DagInit
+        DagInit<'a>
     );
 
     /// Returns a [`RecordValue`] for the field with the given name.
-    pub fn value(self, name: &str) -> Option<RecordValue> {
+    pub fn value<'n>(
+        self,
+        name: &'n str,
+    ) -> Result<RecordValue<'a>, SourceError<'a, MissingValueError>> {
         unsafe {
             let value = tableGenRecordGetValue(self.raw, StringRef::from(name).to_raw());
             if !value.is_null() {
-                Some(RecordValue::from_raw(value))
+                Ok(RecordValue::from_raw(value, self.keeper))
             } else {
-                None
+                Err(MissingValueError::new(name.into()).with_location(self))
             }
         }
     }
@@ -190,13 +198,24 @@ impl<'a> Record<'a> {
     }
 }
 
+impl<'a> SourceLoc<'a> for Record<'a> {
+    fn source_location(self) -> SourceLocation<'a> {
+        unsafe { SourceLocation::from_raw(tableGenRecordGetLoc(self.raw), &self.keeper.parser) }
+    }
+}
+
 macro_rules! try_into {
     ($type:ty) => {
         impl<'a> TryFrom<RecordValue<'a>> for $type {
-            type Error = TableGenError;
+            type Error = SourceError<
+                'a,
+                RecordValueConversionError<'a, <$type as TryFrom<TypedInit<'a>>>::Error>,
+            >;
 
             fn try_from(record_value: RecordValue<'a>) -> Result<Self, Self::Error> {
-                record_value.init.try_into()
+                Self::try_from(record_value.init).map_err(|e| {
+                    RecordValueConversionError::new(record_value, e).with_location(record_value)
+                })
             }
         }
     };
@@ -221,9 +240,10 @@ impl<'a> From<RecordValue<'a>> for TypedInit<'a> {
 /// Struct that represents a field of a [`Record`].
 ///
 /// Can be converted into a Rust type using the [`TryInto`] trait.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RecordValue<'a> {
     raw: TableGenRecordValRef,
+    keeper: &'a RecordKeeper<'a>,
     pub name: StringInit<'a>,
     pub init: TypedInit<'a>,
 }
@@ -250,14 +270,21 @@ impl<'a> RecordValue<'a> {
     /// # Safety
     ///
     /// The raw object must be valid.
-    pub unsafe fn from_raw(ptr: TableGenRecordValRef) -> Self {
-        let name = StringInit::from_raw(tableGenRecordValGetNameInit(ptr));
-        let value = TypedInit::from_raw(tableGenRecordValGetValue(ptr));
+    pub unsafe fn from_raw(ptr: TableGenRecordValRef, keeper: &'a RecordKeeper) -> Self {
+        let name = StringInit::from_raw(tableGenRecordValGetNameInit(ptr), keeper);
+        let value = TypedInit::from_raw(tableGenRecordValGetValue(ptr), keeper);
         Self {
             name,
+            keeper,
             init: value,
             raw: ptr,
         }
+    }
+}
+
+impl<'a> SourceLoc<'a> for RecordValue<'a> {
+    fn source_location(self) -> SourceLocation<'a> {
+        unsafe { SourceLocation::from_raw(tableGenRecordValGetLoc(self.raw), &self.keeper.parser) }
     }
 }
 
@@ -265,16 +292,16 @@ impl<'a> RecordValue<'a> {
 pub struct RecordValueIter<'a> {
     record: TableGenRecordRef,
     current: TableGenRecordValRef,
-    _reference: PhantomData<&'a TableGenRecordRef>,
+    keeper: &'a RecordKeeper<'a>,
 }
 
 impl<'a> RecordValueIter<'a> {
-    fn new(record: Record) -> RecordValueIter<'_> {
+    fn new(record: Record<'a>) -> RecordValueIter<'a> {
         unsafe {
             RecordValueIter {
                 record: record.raw,
                 current: tableGenRecordGetFirstValue(record.raw),
-                _reference: PhantomData,
+                keeper: record.keeper,
             }
         }
     }
@@ -287,7 +314,7 @@ impl<'a> Iterator for RecordValueIter<'a> {
         let res = if self.current.is_null() {
             None
         } else {
-            unsafe { Some(RecordValue::from_raw(self.current)) }
+            unsafe { Some(RecordValue::from_raw(self.current, self.keeper)) }
         };
         self.current = unsafe { tableGenRecordValNext(self.record, self.current) };
         res
@@ -389,4 +416,45 @@ mod tests {
             }
         }
     }
+
+    // #[test]
+    // fn print_error() {
+    //     let rk = TableGenParser::new()
+    //         .add_source_file("test.td")
+    //         // .add_source(
+    //         //     r#"
+    //         //     class C<int test> {
+    //         //         int a = test;
+    //         //     }
+    //         //     def A : C<4> {
+    //         //         string n = "hello";
+    //         //     }
+    //         //     "#,
+    //         // )
+    //         .unwrap()
+    //         .parse()
+    //         .expect("valid tablegen");
+    //     let a = rk.def("A").expect("def A exists");
+    //     let values = a.values();
+    //     assert_eq!(values.clone().count(), 2);
+    //     for v in values {
+    //         // let string: String = v.try_into().unwrap();
+    //         match TryInto::<String>::try_into(v) {
+    //             Ok(s) => println!("{}", s),
+    //             Err(e) => println!("{}", e),
+    //         };
+    //         match v.init {
+    //             TypedInit::Int(i) => {
+    //                 assert_eq!(v.name.to_str(), Ok("a"));
+    //                 assert_eq!(i64::from(i), 4);
+    //             }
+    //             TypedInit::String(i) => {
+    //                 assert_eq!(v.name.to_str(), Ok("n"));
+    //                 assert_eq!(i.to_str(), Ok("hello"));
+    //             }
+    //             _ => panic!("unexpected type"),
+    //         }
+    //     }
+    //     assert!(false)
+    // }
 }

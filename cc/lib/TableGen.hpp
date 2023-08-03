@@ -24,6 +24,7 @@
 
 #include "TableGen.h"
 #include "Types.h"
+#include "llvm/Support/CBindingWrapping.h"
 
 using namespace llvm;
 
@@ -41,8 +42,8 @@ public:
   void addIncludePath(const StringRef include);
   RecordKeeper *parse();
 
-private:
   SourceMgr sourceMgr;
+private:
   std::vector<std::string> includeDirs;
 };
 
@@ -92,5 +93,7 @@ DEFINE_SIMPLE_CONVERSION_FUNCTIONS(ctablegen::DagPair, TableGenDagPairRef);
 
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(ctablegen::RecordMap::const_iterator,
                                    TableGenRecordKeeperIteratorRef);
+
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(ArrayRef<SMLoc>, TableGenSourceLocationRef);
 
 #endif

@@ -67,3 +67,7 @@ void tableGenRecordValPrint(TableGenRecordValRef rv_ref, TableGenStringCallback 
 void tableGenRecordValDump(TableGenRecordValRef rv_ref) {
   unwrap(rv_ref)->dump();
 }
+
+TableGenSourceLocationRef tableGenRecordValGetLoc(TableGenRecordValRef rv_ref) {
+  return wrap(new ArrayRef(unwrap(rv_ref)->getLoc()));
+}

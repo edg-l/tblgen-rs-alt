@@ -26,6 +26,13 @@ extern "C" {
 #endif
 
 typedef enum {
+    TABLEGEN_DK_ERROR,
+    TABLEGEN_DK_WARNING,
+    TABLEGEN_DK_REMARK,
+    TABLEGEN_DK_NOTE,
+} TableGenDiagKind;
+
+typedef enum {
   TableGenBitRecTyKind,
   TableGenBitsRecTyKind,
   TableGenCodeRecTyKind,
@@ -104,6 +111,7 @@ TableGenBool tableGenRecordIsSubclassOf(TableGenRecordRef record_ref,
 void tableGenRecordPrint(TableGenRecordRef record_ref,
                          TableGenStringCallback callback, void *userData);
 void tableGenRecordDump(TableGenRecordRef record_ref);
+TableGenSourceLocationRef tableGenRecordGetLoc(TableGenRecordRef record_ref);
 
 // LLVM RecordVal
 TableGenStringRef tableGenRecordValGetName(TableGenRecordValRef rv_ref);
@@ -117,6 +125,7 @@ TableGenRecordValRef tableGenRecordValNext(TableGenRecordRef record,
 void tableGenRecordValPrint(TableGenRecordValRef rv_ref,
                             TableGenStringCallback callback, void *userData);
 void tableGenRecordValDump(TableGenRecordValRef rv_ref);
+TableGenSourceLocationRef tableGenRecordValGetLoc(TableGenRecordValRef rv_ref);
 
 char *tableGenRecordValGetValAsNewString(TableGenRecordValRef rv_ref);
 TableGenBool tableGenRecordValGetValAsBit(TableGenRecordValRef rv_ref,
@@ -156,8 +165,13 @@ TableGenRecordRef tableGenDefInitGetValue(TableGenTypedInitRef ti);
 void tableGenInitPrint(TableGenTypedInitRef ti,
                          TableGenStringCallback callback, void *userData);
 void tableGenInitDump(TableGenTypedInitRef ti);
+void tableGenPrintError(TableGenParserRef ref, TableGenSourceLocationRef loc_ref, TableGenDiagKind dk,
+                        TableGenStringRef message,
+                        TableGenStringCallback callback, void *userData);
+TableGenSourceLocationRef tableGenSourceLocationClone(TableGenSourceLocationRef loc_ref);
 
 // Memory
+void tableGenSourceLocationFree(TableGenSourceLocationRef loc_ref);
 void tableGenBitArrayFree(int8_t bit_array[]);
 void tableGenStringFree(const char *str);
 void tableGenStringArrayFree(const char **str_array);

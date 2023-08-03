@@ -21,35 +21,35 @@ use crate::raw::{
 };
 use crate::record::Record;
 use crate::string_ref::StringRef;
+use crate::TableGenParser;
 
 /// Struct that holds all records from a TableGen file.
-#[derive(Debug)]
-pub struct RecordKeeper {
+#[derive(Debug, PartialEq, Eq)]
+pub struct RecordKeeper<'s> {
     raw: TableGenRecordKeeperRef,
+    pub(crate) parser: TableGenParser<'s>,
 }
 
-impl RecordKeeper {
-    /// Creates an owned record keeper from a raw object.
-    ///
-    /// # Safety
-    ///
-    /// The raw object must be valid.
-    pub unsafe fn from_raw(raw: TableGenRecordKeeperRef) -> RecordKeeper {
-        RecordKeeper { raw }
+impl<'s> RecordKeeper<'s> {
+    pub(crate) unsafe fn from_raw(
+        raw: TableGenRecordKeeperRef,
+        parser: TableGenParser<'s>,
+    ) -> RecordKeeper<'s> {
+        RecordKeeper { raw, parser }
     }
 
     /// Returns an iterator over all classes.
     ///
     /// The iterator yields tuples of type `(String, Record)`.
     pub fn classes(&self) -> NamedRecordIter<'_, IsClass> {
-        unsafe { NamedRecordIter::from_raw(tableGenRecordKeeperGetFirstClass(self.raw)) }
+        unsafe { NamedRecordIter::from_raw(tableGenRecordKeeperGetFirstClass(self.raw), self) }
     }
 
     /// Returns an iterator over all definitions.
     ///
     /// The iterator yields tuples of type `(String, Record)`.
     pub fn defs(&self) -> NamedRecordIter<'_, IsDef> {
-        unsafe { NamedRecordIter::from_raw(tableGenRecordKeeperGetFirstDef(self.raw)) }
+        unsafe { NamedRecordIter::from_raw(tableGenRecordKeeperGetFirstDef(self.raw), self) }
     }
 
     /// Returns the class with the given name.
@@ -59,7 +59,7 @@ impl RecordKeeper {
             if class.is_null() {
                 None
             } else {
-                Some(Record::from_raw(class))
+                Some(Record::from_raw(self, class))
             }
         }
     }
@@ -71,7 +71,7 @@ impl RecordKeeper {
             if def.is_null() {
                 None
             } else {
-                Some(Record::from_raw(def))
+                Some(Record::from_raw(self, def))
             }
         }
     }
@@ -80,15 +80,18 @@ impl RecordKeeper {
     /// the given name.
     pub fn all_derived_definitions(&self, name: &str) -> RecordIter {
         unsafe {
-            RecordIter::from_raw_vector(tableGenRecordKeeperGetAllDerivedDefinitions(
-                self.raw,
-                StringRef::from(name).to_raw(),
-            ))
+            RecordIter::from_raw_vector(
+                tableGenRecordKeeperGetAllDerivedDefinitions(
+                    self.raw,
+                    StringRef::from(name).to_raw(),
+                ),
+                self,
+            )
         }
     }
 }
 
-impl Drop for RecordKeeper {
+impl<'s> Drop for RecordKeeper<'s> {
     fn drop(&mut self) {
         unsafe {
             tableGenRecordKeeperFree(self.raw);
@@ -121,15 +124,15 @@ impl NextRecord for IsDef {
 pub struct NamedRecordIter<'a, T> {
     raw: TableGenRecordKeeperIteratorRef,
     _kind: PhantomData<T>,
-    _reference: PhantomData<&'a RecordKeeper>,
+    keeper: &'a RecordKeeper<'a>,
 }
 
 impl<'a, T> NamedRecordIter<'a, T> {
-    unsafe fn from_raw(raw: TableGenRecordKeeperIteratorRef) -> Self {
+    unsafe fn from_raw(raw: TableGenRecordKeeperIteratorRef, keeper: &'a RecordKeeper<'a>) -> Self {
         NamedRecordIter {
             raw,
             _kind: PhantomData,
-            _reference: PhantomData,
+            keeper,
         }
     }
 }
@@ -144,7 +147,7 @@ impl<'a, T: NextRecord> Iterator for NamedRecordIter<'a, T> {
             unsafe {
                 Some((
                     StringRef::from_raw(tableGenRecordKeeperItemGetName(self.raw)).try_into(),
-                    Record::from_raw(tableGenRecordKeeperItemGetRecord(self.raw)),
+                    Record::from_raw(self.keeper, tableGenRecordKeeperItemGetRecord(self.raw)),
                 ))
             }
         };
@@ -155,7 +158,7 @@ impl<'a, T: NextRecord> Iterator for NamedRecordIter<'a, T> {
 
 impl<'a, T> Clone for NamedRecordIter<'a, T> {
     fn clone(&self) -> Self {
-        unsafe { Self::from_raw(tableGenRecordKeeperIteratorClone(self.raw)) }
+        unsafe { Self::from_raw(tableGenRecordKeeperIteratorClone(self.raw), self.keeper) }
     }
 }
 
@@ -168,15 +171,18 @@ impl<'a, T> Drop for NamedRecordIter<'a, T> {
 pub struct RecordIter<'a> {
     raw: TableGenRecordVectorRef,
     index: usize,
-    _reference: PhantomData<&'a RecordKeeper>,
+    keeper: &'a RecordKeeper<'a>,
 }
 
 impl<'a> RecordIter<'a> {
-    unsafe fn from_raw_vector(ptr: TableGenRecordVectorRef) -> RecordIter<'a> {
+    unsafe fn from_raw_vector(
+        ptr: TableGenRecordVectorRef,
+        keeper: &'a RecordKeeper<'a>,
+    ) -> RecordIter<'a> {
         RecordIter {
             raw: ptr,
             index: 0,
-            _reference: PhantomData,
+            keeper,
         }
     }
 }
@@ -190,7 +196,7 @@ impl<'a> Iterator for RecordIter<'a> {
         if next.is_null() {
             None
         } else {
-            unsafe { Some(Record::from_raw(next)) }
+            unsafe { Some(Record::from_raw(self.keeper, next)) }
         }
     }
 }

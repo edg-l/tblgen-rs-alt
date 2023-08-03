@@ -57,6 +57,10 @@ TableGenBool tableGenRecordIsSubclassOf(TableGenRecordRef record_ref,
   return unwrap(record_ref)->isSubClassOf(StringRef(name.data, name.len));
 }
 
+TableGenSourceLocationRef tableGenRecordGetLoc(TableGenRecordRef record_ref) {
+  return wrap(new ArrayRef(unwrap(record_ref)->getLoc()));
+}
+
 void tableGenRecordPrint(TableGenRecordRef record_ref,
                          TableGenStringCallback callback, void *userData) {
   ctablegen::CallbackOstream stream(callback, userData);

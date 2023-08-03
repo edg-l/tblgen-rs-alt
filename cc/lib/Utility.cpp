@@ -11,6 +11,8 @@
 #include "TableGen.h"
 #include "TableGen.hpp"
 #include "Types.h"
+#include "llvm/Support/SourceMgr.h"
+#include "llvm/TableGen/Error.h"
 
 namespace ctablegen {
 
@@ -84,7 +86,8 @@ TableGenBool tableGenBitsInitGetNumBits(TableGenTypedInitRef ti, size_t *len) {
   return true;
 }
 
-TableGenTypedInitRef tableGenBitsInitGetBitInit(TableGenTypedInitRef ti, size_t index) {
+TableGenTypedInitRef tableGenBitsInitGetBitInit(TableGenTypedInitRef ti,
+                                                size_t index) {
   if (!ti)
     return nullptr;
   auto bits_init = dyn_cast<BitsInit>(unwrap(ti));
@@ -108,12 +111,12 @@ TableGenBool tableGenIntInitGetValue(TableGenTypedInitRef ti,
 
 TableGenStringRef tableGenStringInitGetValue(TableGenTypedInitRef ti) {
   if (!ti)
-    return TableGenStringRef { .data = nullptr, .len = 0 };
+    return TableGenStringRef{.data = nullptr, .len = 0};
   auto str_init = dyn_cast<StringInit>(unwrap(ti));
   if (!str_init)
-    return TableGenStringRef { .data = nullptr, .len = 0 };
+    return TableGenStringRef{.data = nullptr, .len = 0};
   auto val = str_init->getValue();
-  return TableGenStringRef { .data = val.data(), .len = val.size() };
+  return TableGenStringRef{.data = val.data(), .len = val.size()};
 }
 
 char *tableGenStringInitGetValueNewString(TableGenTypedInitRef ti) {
@@ -140,12 +143,34 @@ TableGenRecordRef tableGenDefInitGetValue(TableGenTypedInitRef ti) {
   return wrap(def_init->getDef());
 }
 
-void tableGenInitPrint(TableGenTypedInitRef ti,
-                         TableGenStringCallback callback, void *userData) {
+void tableGenInitPrint(TableGenTypedInitRef ti, TableGenStringCallback callback,
+                       void *userData) {
   ctablegen::CallbackOstream stream(callback, userData);
   stream << *unwrap(ti);
 }
 
-void tableGenInitDump(TableGenTypedInitRef ti) {
-  unwrap(ti)->dump();
+void tableGenInitDump(TableGenTypedInitRef ti) { unwrap(ti)->dump(); }
+
+void tableGenPrintError(TableGenParserRef ref, TableGenSourceLocationRef loc_ref, TableGenDiagKind dk,
+                        TableGenStringRef message,
+                        TableGenStringCallback callback, void *userData) {
+  ctablegen::CallbackOstream stream(callback, userData);
+  ArrayRef<SMLoc> Loc = *unwrap(loc_ref);
+  SMLoc NullLoc;
+  if (Loc.empty())
+    Loc = NullLoc;
+  auto &SrcMgr = unwrap(ref)->sourceMgr;
+  SrcMgr.PrintMessage(stream, Loc.front(), static_cast<SourceMgr::DiagKind>(dk),
+                      StringRef(message.data, message.len));
+  for (unsigned i = 1; i < Loc.size(); ++i)
+    SrcMgr.PrintMessage(stream, Loc.front(), llvm::SourceMgr::DK_Note,
+                        "initiated from multiclass");
+}
+
+TableGenSourceLocationRef tableGenSourceLocationClone(TableGenSourceLocationRef loc_ref) {
+  return wrap(new ArrayRef(*unwrap(loc_ref)));
+}
+
+void tableGenSourceLocationFree(TableGenSourceLocationRef loc_ref) {
+  delete unwrap(loc_ref);
 }
