@@ -21,10 +21,7 @@ use crate::raw::{
 };
 use crate::RecordKeeper;
 
-use crate::error::{
-    MissingOrInvalidValueError, MissingValueError, RecordValueConversionError, SourceError,
-    SourceLoc, SourceLocation, WithLocation,
-};
+use crate::error::{SourceError, SourceLoc, SourceLocation, TableGenError, WithLocation};
 use crate::init::{BitInit, DagInit, ListInit, StringInit, TypedInit};
 use crate::string_ref::StringRef;
 use crate::util::print_callback;
@@ -70,9 +67,9 @@ macro_rules! record_value {
             $(#[$attr])*
             pub fn [<$name _value>]<'n>(self, name: &'n str) -> Result<
                 $type,
-                SourceError<'a, MissingOrInvalidValueError<'a, <$type as TryFrom<TypedInit<'a>>>::Error>>
+                SourceError<'a, TableGenError<'a>>
             > {
-                self.value(name).map_err(|e| e.map(|e| MissingOrInvalidValueError::from(e)))?.try_into().map_err(|e: SourceError<'a, _>| e.map(|e| MissingOrInvalidValueError::from(e)))
+                self.value(name)?.try_into()
             }
         }
     };
@@ -93,10 +90,11 @@ impl<'a> Record<'a> {
     /// # Errors
     ///
     /// Returns an error if the name is not a valid UTF-8 string.
-    pub fn name(self) -> Result<&'a str, SourceError<'a, Utf8Error>> {
+    pub fn name(self) -> Result<&'a str, SourceError<'a, TableGenError<'a>>> {
         unsafe { StringRef::from_raw(tableGenRecordGetName(self.raw)) }
             .try_into()
-            .map_err(|e: Utf8Error| e.with_location(self))
+            .map_err(|e: Utf8Error| TableGenError::from(e))
+            .map_err(|e| e.with_location(self))
     }
 
     record_value!(
@@ -168,14 +166,12 @@ impl<'a> Record<'a> {
     pub fn value<'n>(
         self,
         name: &'n str,
-    ) -> Result<RecordValue<'a>, SourceError<'a, MissingValueError>> {
-        unsafe {
-            let value = tableGenRecordGetValue(self.raw, StringRef::from(name).to_raw());
-            if !value.is_null() {
-                Ok(RecordValue::from_raw(value, self.keeper))
-            } else {
-                Err(MissingValueError::new(name.into()).with_location(self))
-            }
+    ) -> Result<RecordValue<'a>, SourceError<'a, TableGenError<'a>>> {
+        let value = unsafe { tableGenRecordGetValue(self.raw, StringRef::from(name).to_raw()) };
+        if !value.is_null() {
+            Ok(unsafe { RecordValue::from_raw(value, self.keeper) })
+        } else {
+            Err(TableGenError::MissingValue(String::from(name)).with_location(self))
         }
     }
 
@@ -207,15 +203,10 @@ impl<'a> SourceLoc<'a> for Record<'a> {
 macro_rules! try_into {
     ($type:ty) => {
         impl<'a> TryFrom<RecordValue<'a>> for $type {
-            type Error = SourceError<
-                'a,
-                RecordValueConversionError<'a, <$type as TryFrom<TypedInit<'a>>>::Error>,
-            >;
+            type Error = SourceError<'a, TableGenError<'a>>;
 
             fn try_from(record_value: RecordValue<'a>) -> Result<Self, Self::Error> {
-                Self::try_from(record_value.init).map_err(|e| {
-                    RecordValueConversionError::new(record_value, e).with_location(record_value)
-                })
+                Self::try_from(record_value.init).map_err(|e| e.with_location(record_value))
             }
         }
     };
@@ -373,15 +364,15 @@ mod tests {
             .expect("valid tablegen");
         let a = rk.def("A").expect("def A exists");
         assert_eq!(a.name(), Ok("A"));
-        assert_eq!(a.int_value("size"), Some(42));
+        assert_eq!(a.int_value("size"), Ok(42));
         assert_eq!(
             a.value("size")
                 .and_then(|v| {
                     assert!(v.name.to_str() == Ok("size"));
-                    v.init.as_int()
+                    v.init.as_int().map_err(|e| e.with_location(v))
                 })
                 .map(|i| i.into()),
-            Some(42)
+            Ok(42)
         );
     }
 

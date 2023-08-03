@@ -168,6 +168,7 @@ void tableGenInitDump(TableGenTypedInitRef ti);
 void tableGenPrintError(TableGenParserRef ref, TableGenSourceLocationRef loc_ref, TableGenDiagKind dk,
                         TableGenStringRef message,
                         TableGenStringCallback callback, void *userData);
+TableGenSourceLocationRef tableGenSourceLocationNull();
 TableGenSourceLocationRef tableGenSourceLocationClone(TableGenSourceLocationRef loc_ref);
 
 // Memory

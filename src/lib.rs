@@ -65,7 +65,7 @@
 //!     .parse()?;
 //! let i32_def = keeper.def("I32").expect("has I32 def");
 //! assert!(i32_def.subclass_of("I"));
-//! assert_eq!(i32_def.int_value("bitwidth"), Some(32));
+//! assert_eq!(i32_def.int_value("bitwidth"), Ok(32));
 //! # Ok(())
 //! # }
 //! ```
@@ -101,8 +101,7 @@ use std::ffi::CString;
 use std::marker::PhantomData;
 use std::sync::Mutex;
 
-use error::InvalidSourceError;
-use error::ParseError;
+use error::TableGenError;
 pub use init::TypedInit;
 pub use record::Record;
 pub use record::RecordValue;
@@ -151,11 +150,11 @@ impl<'s> TableGenParser<'s> {
     }
 
     /// Reads TableGen source code from the file at the given path.
-    pub fn add_source_file(self, source: &str) -> Result<Self, InvalidSourceError> {
+    pub fn add_source_file(self, source: &str) -> Result<Self, TableGenError> {
         if unsafe { tableGenAddSourceFile(self.raw, StringRef::from(source).to_raw()) > 0 } {
             Ok(self)
         } else {
-            Err(InvalidSourceError::Other)
+            Err(TableGenError::InvalidSource)
         }
     }
 
@@ -163,18 +162,18 @@ impl<'s> TableGenParser<'s> {
     ///
     /// The string must be null-terminated and is not copied, hence it is
     /// required to live until the source code is parsed.
-    pub fn add_source_raw(self, source: &'s CStr) -> Result<Self, InvalidSourceError> {
+    pub fn add_source_raw(self, source: &'s CStr) -> Result<Self, TableGenError> {
         if unsafe { tableGenAddSource(self.raw, source.as_ptr()) > 0 } {
             Ok(self)
         } else {
-            Err(InvalidSourceError::Other)
+            Err(TableGenError::InvalidSource)
         }
     }
 
     /// Adds the given TableGen source string.
     ///
     /// The string is copied into a null-terminated [`CString`].
-    pub fn add_source(mut self, source: &str) -> Result<Self, InvalidSourceError> {
+    pub fn add_source(mut self, source: &str) -> Result<Self, TableGenError> {
         let string = CString::new(source)?;
         self.source_strings.push(string);
         if unsafe {
@@ -185,7 +184,7 @@ impl<'s> TableGenParser<'s> {
         } {
             Ok(self)
         } else {
-            Err(InvalidSourceError::Other)
+            Err(TableGenError::InvalidSource)
         }
     }
 
@@ -194,14 +193,14 @@ impl<'s> TableGenParser<'s> {
     /// Due to limitations of TableGen, parsing TableGen is not thread-safe.
     /// In order to provide thread-safety, this method ensures that any
     /// concurrent parse operations are executed sequentially.
-    pub fn parse(self) -> Result<RecordKeeper<'s>, ParseError> {
+    pub fn parse(self) -> Result<RecordKeeper<'s>, TableGenError<'s>> {
         unsafe {
             let guard = TABLEGEN_PARSE_LOCK.lock().unwrap();
             let keeper = tableGenParse(self.raw);
             let res = if !keeper.is_null() {
                 Ok(RecordKeeper::from_raw(keeper, self))
             } else {
-                Err(ParseError)
+                Err(TableGenError::Parse)
             };
             drop(guard);
             res

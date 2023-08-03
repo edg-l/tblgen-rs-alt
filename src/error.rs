@@ -19,108 +19,44 @@ use std::{
 use crate::{
     raw::{
         tableGenPrintError, tableGenSourceLocationClone, tableGenSourceLocationFree,
-        TableGenDiagKind::TABLEGEN_DK_ERROR, TableGenSourceLocationRef,
+        tableGenSourceLocationNull, TableGenDiagKind::TABLEGEN_DK_ERROR, TableGenSourceLocationRef,
     },
     string_ref::StringRef,
     util::print_callback,
     RecordValue, TableGenParser, TypedInit,
 };
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum InvalidSourceError {
-    StringNulError(NulError),
-    Other,
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+pub enum TableGenError<'a> {
+    #[error("invalid TableGen source")]
+    InvalidSource,
+    #[error("invalid TableGen source")]
+    InvalidSourceString(#[from] NulError),
+    #[error("invalid UTF-8 string")]
+    InvalidUtf8String(#[from] Utf8Error),
+    #[error("failed to parse TableGen source")]
+    Parse,
+    #[error("expected field {0} in record")]
+    MissingValue(String),
+    #[error(transparent)]
+    InitConversion(InitConversionError<'a>),
 }
 
-impl From<NulError> for InvalidSourceError {
-    fn from(value: NulError) -> Self {
-        Self::StringNulError(value)
+impl<'a> From<InitConversionError<'a>> for TableGenError<'a> {
+    fn from(value: InitConversionError<'a>) -> Self {
+        TableGenError::InitConversion(value)
     }
 }
-
-impl Display for InvalidSourceError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid TableGen source")?;
-        match self {
-            InvalidSourceError::StringNulError(e) => write!(f, " : {}", e),
-            InvalidSourceError::Other => Ok(()),
-        }
-    }
-}
-
-impl Error for InvalidSourceError {}
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct ParseError;
-
-impl Display for ParseError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "errors occurred while parsing TableGen source (printed to stderr)"
-        )
-    }
-}
-
-impl Error for ParseError {}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum MissingOrInvalidValueError<'a, E> {
-    Missing(MissingValueError),
-    Coversion(RecordValueConversionError<'a, E>),
-}
-
-impl<'a, E> From<MissingValueError> for MissingOrInvalidValueError<'a, E> {
-    fn from(value: MissingValueError) -> Self {
-        Self::Missing(value)
-    }
-}
-
-impl<'a, E: Error> From<RecordValueConversionError<'a, E>> for MissingOrInvalidValueError<'a, E> {
-    fn from(value: RecordValueConversionError<'a, E>) -> Self {
-        Self::Coversion(value)
-    }
-}
-
-impl<'a, E: Error> Display for MissingOrInvalidValueError<'a, E> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            MissingOrInvalidValueError::Missing(e) => write!(f, "{e}"),
-            MissingOrInvalidValueError::Coversion(e) => write!(f, "{e}"),
-        }
-    }
-}
-
-impl<'a, E: Error> Error for MissingOrInvalidValueError<'a, E> {}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct MissingValueError {
-    name: String,
-}
-
-impl MissingValueError {
-    pub fn new(name: String) -> Self {
-        Self { name }
-    }
-}
-
-impl Display for MissingValueError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "expected field {} in record", self.name)
-    }
-}
-
-impl Error for MissingValueError {}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct InitConversionError<'a, E> {
+pub struct InitConversionError<'a> {
     init: TypedInit<'a>,
     target: &'static str,
-    error: Option<E>,
+    error: Option<String>,
 }
 
-impl<'a, E: Error> InitConversionError<'a, E> {
-    pub fn new(init: TypedInit<'a>, target: &'static str, error: Option<E>) -> Self {
+impl<'a> InitConversionError<'a> {
+    pub fn new(init: TypedInit<'a>, target: &'static str, error: Option<String>) -> Self {
         Self {
             init,
             target,
@@ -136,12 +72,12 @@ impl<'a, E: Error> InitConversionError<'a, E> {
         &self.target
     }
 
-    pub fn inner_error(&self) -> Option<&E> {
-        self.error.as_ref()
+    pub fn inner_error(&self) -> Option<&str> {
+        self.error.as_ref().map(|s| s.as_str())
     }
 }
 
-impl<'a, E: Error> Display for InitConversionError<'a, E> {
+impl<'a> Display for InitConversionError<'a> {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         if let Some(error) = self.inner_error() {
             write!(
@@ -159,39 +95,7 @@ impl<'a, E: Error> Display for InitConversionError<'a, E> {
     }
 }
 
-impl<'a, E: Error> Error for InitConversionError<'a, E> {}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct RecordValueConversionError<'a, E> {
-    value: RecordValue<'a>,
-    init_error: E,
-}
-
-impl<'a, E: Error> RecordValueConversionError<'a, E> {
-    pub fn new(value: RecordValue<'a>, init_error: E) -> Self {
-        Self { value, init_error }
-    }
-
-    pub fn value(&self) -> RecordValue<'a> {
-        self.value
-    }
-
-    pub fn inner_error(&self) -> &E {
-        &self.init_error
-    }
-}
-
-impl<'a, E: Error> Display for RecordValueConversionError<'a, E> {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        write!(
-            formatter,
-            "while converting from record value: {}",
-            self.init_error,
-        )
-    }
-}
-
-impl<'a, E: Error> Error for RecordValueConversionError<'a, E> {}
+impl<'a> Error for InitConversionError<'a> {}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct SourceLocation<'s> {
@@ -202,6 +106,15 @@ pub struct SourceLocation<'s> {
 impl<'s> SourceLocation<'s> {
     pub unsafe fn from_raw(raw: TableGenSourceLocationRef, parser: &'s TableGenParser<'s>) -> Self {
         Self { raw, parser }
+    }
+
+    pub fn none(parser: &'s TableGenParser<'s>) -> Self {
+        unsafe {
+            Self {
+                raw: tableGenSourceLocationNull(),
+                parser,
+            }
+        }
     }
 }
 

@@ -28,7 +28,9 @@ use crate::{
 };
 use paste::paste;
 
-use crate::{error::InitConversionError, record::Record, record_keeper::RecordKeeper};
+use crate::{
+    error::InitConversionError, error::TableGenError, record::Record, record_keeper::RecordKeeper,
+};
 use std::{
     ffi::c_void,
     fmt::{self, Debug, Display, Formatter},
@@ -88,10 +90,10 @@ impl<'a> Debug for TypedInit<'a> {
 macro_rules! as_inner {
     ($name:ident, $variant:ident, $type:ty) => {
         paste! {
-            pub fn [<as_ $name>](self) -> Option<$type<'a>> {
+            pub fn [<as_ $name>](self) -> Result<$type<'a>, TableGenError<'a>> {
                 match self {
-                    Self::$variant(v) => Some(v),
-                    _ => None
+                    Self::$variant(v) => Ok(v),
+                    _ => Err(TableGenError::from(InitConversionError::new(self, std::any::type_name::<$type>(), None)))
                 }
             }
         }
@@ -101,12 +103,16 @@ macro_rules! as_inner {
 macro_rules! try_into {
     ($variant:ident, $init:ty, $type:ty) => {
         impl<'a> TryFrom<TypedInit<'a>> for $type {
-            type Error = InitConversionError<'a, <$type as TryFrom<$init>>::Error>;
+            type Error = TableGenError<'a>;
 
             fn try_from(value: TypedInit<'a>) -> Result<Self, Self::Error> {
                 match value {
                     TypedInit::$variant(v) => Self::try_from(v).map_err(|e| {
-                        InitConversionError::new(value, std::any::type_name::<$type>(), Some(e))
+                        InitConversionError::new(
+                            value,
+                            std::any::type_name::<$type>(),
+                            Some(format!("{}", e)),
+                        )
                     }),
                     _ => Err(InitConversionError::new(
                         value,
@@ -114,6 +120,7 @@ macro_rules! try_into {
                         None,
                     )),
                 }
+                .map_err(|e| TableGenError::from(e))
             }
         }
     };
@@ -128,12 +135,16 @@ try_into!(List, ListInit<'a>, ListInit<'a>);
 try_into!(Dag, DagInit<'a>, DagInit<'a>);
 
 impl<'a> TryFrom<TypedInit<'a>> for String {
-    type Error = InitConversionError<'a, <String as TryFrom<StringInit<'a>>>::Error>;
+    type Error = TableGenError<'a>;
 
     fn try_from(value: TypedInit<'a>) -> Result<Self, Self::Error> {
         match value {
             TypedInit::String(v) | TypedInit::Code(v) => Self::try_from(v).map_err(|e| {
-                InitConversionError::new(value, std::any::type_name::<String>(), Some(e))
+                InitConversionError::new(
+                    value,
+                    std::any::type_name::<String>(),
+                    Some(format!("{}", e)),
+                )
             }),
             _ => Err(InitConversionError::new(
                 value,
@@ -141,16 +152,21 @@ impl<'a> TryFrom<TypedInit<'a>> for String {
                 None,
             )),
         }
+        .map_err(|e| TableGenError::from(e))
     }
 }
 
 impl<'a> TryFrom<TypedInit<'a>> for &'a str {
-    type Error = InitConversionError<'a, <&'a str as TryFrom<StringInit<'a>>>::Error>;
+    type Error = TableGenError<'a>;
 
     fn try_from(value: TypedInit<'a>) -> Result<Self, Self::Error> {
         match value {
             TypedInit::String(v) | TypedInit::Code(v) => v.to_str().map_err(|e| {
-                InitConversionError::new(value, std::any::type_name::<String>(), Some(e))
+                InitConversionError::new(
+                    value,
+                    std::any::type_name::<String>(),
+                    Some(format!("{}", e)),
+                )
             }),
             _ => Err(InitConversionError::new(
                 value,
@@ -158,6 +174,7 @@ impl<'a> TryFrom<TypedInit<'a>> for &'a str {
                 None,
             )),
         }
+        .map_err(|e| TableGenError::from(e))
     }
 }
 
@@ -538,14 +555,14 @@ mod tests {
                 name,
                 Record::try_from(init).expect("is record").int_value("i")
             )),
-            Some(("src1", Some(4)))
+            Some(("src1", Ok(4)))
         );
         assert_eq!(
             args.skip(1).next().map(|(name, init)| (
                 name,
                 Record::try_from(init).expect("is record").string_value("s")
             )),
-            Some(("src2", Some("test".into())))
+            Some(("src2", Ok("test".into())))
         );
     }
 

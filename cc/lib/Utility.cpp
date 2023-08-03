@@ -167,6 +167,10 @@ void tableGenPrintError(TableGenParserRef ref, TableGenSourceLocationRef loc_ref
                         "initiated from multiclass");
 }
 
+TableGenSourceLocationRef tableGenSourceLocationNull() {
+  return wrap(new ArrayRef(SMLoc()));
+}
+
 TableGenSourceLocationRef tableGenSourceLocationClone(TableGenSourceLocationRef loc_ref) {
   return wrap(new ArrayRef(*unwrap(loc_ref)));
 }
