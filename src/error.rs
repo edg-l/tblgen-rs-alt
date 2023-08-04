@@ -77,6 +77,7 @@ use crate::{
 };
 
 /// Enum of TableGen errors.
+#[non_exhaustive]
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum TableGenError {
     #[error("invalid TableGen source")]
@@ -91,6 +92,10 @@ pub enum TableGenError {
     Parse,
     #[error("expected field {0} in record")]
     MissingValue(String),
+    #[error("expected def {0}")]
+    MissingDef(String),
+    #[error("expected class {0}")]
+    MissingClass(String),
     #[error("invalid conversion from {from} to {to}")]
     InitConversion {
         from: &'static str,
@@ -188,8 +193,8 @@ impl<E: std::error::Error> SourceError<E> {
     ///
     /// Any source information that was previously attached with
     /// [`SourceError::add_source_info`] will be removed.
-    pub fn set_location(mut self, location: SourceLocation) -> Self {
-        self.location = location;
+    pub fn set_location(mut self, location: impl SourceLoc) -> Self {
+        self.location = location.source_location();
         self
     }
 

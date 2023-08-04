@@ -203,7 +203,7 @@ macro_rules! try_into {
             type Error = Error;
 
             fn try_from(record_value: RecordValue<'a>) -> Result<Self, Self::Error> {
-                Self::try_from(record_value.init).map_err(|e| e.with_location(record_value))
+                Self::try_from(record_value.init).map_err(|e| e.set_location(record_value))
             }
         }
     };
@@ -366,7 +366,7 @@ mod tests {
             a.value("size")
                 .and_then(|v| {
                     assert!(v.name.to_str() == Ok("size"));
-                    v.init.as_int().map_err(|e| e.with_location(v))
+                    v.init.as_int().map_err(|e| e.set_location(v))
                 })
                 .map(|i| i.into()),
             Ok(42)

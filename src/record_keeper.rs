@@ -10,6 +10,7 @@
 
 use std::marker::PhantomData;
 
+use crate::error::{SourceLocation, TableGenError, WithLocation};
 use crate::raw::{
     tableGenRecordKeeperFree, tableGenRecordKeeperGetAllDerivedDefinitions,
     tableGenRecordKeeperGetClass, tableGenRecordKeeperGetDef, tableGenRecordKeeperGetFirstClass,
@@ -21,7 +22,7 @@ use crate::raw::{
 };
 use crate::record::Record;
 use crate::string_ref::StringRef;
-use crate::{SourceInfo, TableGenParser};
+use crate::{Error, SourceInfo, TableGenParser};
 
 /// Struct that holds all records from a TableGen file.
 #[derive(Debug, PartialEq, Eq)]
@@ -53,25 +54,25 @@ impl<'s> RecordKeeper<'s> {
     }
 
     /// Returns the class with the given name.
-    pub fn class(&self, name: &str) -> Option<Record> {
+    pub fn class(&self, name: &str) -> Result<Record, Error> {
         unsafe {
             let class = tableGenRecordKeeperGetClass(self.raw, StringRef::from(name).to_raw());
             if class.is_null() {
-                None
+                Err(TableGenError::MissingClass(name.into()).into())
             } else {
-                Some(Record::from_raw(class))
+                Ok(Record::from_raw(class))
             }
         }
     }
 
     /// Returns the definition with the given name.
-    pub fn def(&self, name: &str) -> Option<Record> {
+    pub fn def(&self, name: &str) -> Result<Record, Error> {
         unsafe {
             let def = tableGenRecordKeeperGetDef(self.raw, StringRef::from(name).to_raw());
             if def.is_null() {
-                None
+                Err(TableGenError::MissingDef(name.into()).into())
             } else {
-                Some(Record::from_raw(def))
+                Ok(Record::from_raw(def))
             }
         }
     }

@@ -28,7 +28,7 @@ use crate::{
 };
 use paste::paste;
 
-use crate::{error::TableGenError, record::Record};
+use crate::{error::Error, error::TableGenError, record::Record};
 use std::{
     ffi::c_void,
     fmt::{self, Debug, Display, Formatter},
@@ -106,13 +106,13 @@ impl<'a> Debug for TypedInit<'a> {
 macro_rules! as_inner {
     ($name:ident, $variant:ident, $type:ty) => {
         paste! {
-            pub fn [<as_ $name>](self) -> Result<$type<'a>, TableGenError> {
+            pub fn [<as_ $name>](self) -> Result<$type<'a>, Error> {
                 match self {
                     Self::$variant(v) => Ok(v),
                     _ => Err(TableGenError::InitConversion {
                         from: self.variant_name(),
                         to: std::any::type_name::<$type>()
-                    })
+                    }.into())
                 }
             }
         }
@@ -122,15 +122,16 @@ macro_rules! as_inner {
 macro_rules! try_into {
     ($variant:ident, $init:ty, $type:ty) => {
         impl<'a> TryFrom<TypedInit<'a>> for $type {
-            type Error = TableGenError;
+            type Error = Error;
 
             fn try_from(value: TypedInit<'a>) -> Result<Self, Self::Error> {
                 match value {
-                    TypedInit::$variant(v) => Ok(Self::try_from(v)?),
+                    TypedInit::$variant(v) => Ok(Self::try_from(v).map_err(TableGenError::from)?),
                     _ => Err(TableGenError::InitConversion {
                         from: value.variant_name(),
                         to: std::any::type_name::<$type>(),
-                    }),
+                    }
+                    .into()),
                 }
             }
         }
@@ -146,32 +147,37 @@ try_into!(List, ListInit<'a>, ListInit<'a>);
 try_into!(Dag, DagInit<'a>, DagInit<'a>);
 
 impl<'a> TryFrom<TypedInit<'a>> for String {
-    type Error = TableGenError;
+    type Error = Error;
 
     fn try_from(value: TypedInit<'a>) -> Result<Self, Self::Error> {
         match value {
-            TypedInit::String(v) | TypedInit::Code(v) => Ok(Self::try_from(v)?),
+            TypedInit::String(v) | TypedInit::Code(v) => {
+                Ok(Self::try_from(v).map_err(TableGenError::from)?)
+            }
             _ => Err(TableGenError::InitConversion {
                 from: value.variant_name(),
                 to: std::any::type_name::<String>(),
-            }),
+            }
+            .into()),
         }
-        .map_err(TableGenError::from)
     }
 }
 
 impl<'a> TryFrom<TypedInit<'a>> for &'a str {
-    type Error = TableGenError;
+    type Error = Error;
 
     fn try_from(value: TypedInit<'a>) -> Result<Self, Self::Error> {
         match value {
-            TypedInit::String(v) | TypedInit::Code(v) => Ok(Self::try_from(v.to_str()?)?),
+            TypedInit::String(v) | TypedInit::Code(v) => {
+                Ok(Self::try_from(v.to_str().map_err(TableGenError::from)?)
+                    .map_err(TableGenError::from)?)
+            }
             _ => Err(TableGenError::InitConversion {
                 from: value.variant_name(),
                 to: std::any::type_name::<&'a str>(),
-            }),
+            }
+            .into()),
         }
-        .map_err(TableGenError::from)
     }
 }
 
