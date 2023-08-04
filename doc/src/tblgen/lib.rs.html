@@ -214,6 +214,17 @@
 <a href="#214" id="214">214</a>
 <a href="#215" id="215">215</a>
 <a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
 </pre></div><pre class="rust"><code><span class="comment">// Original work Copyright 2016 Alexander Stocko &lt;as@coder.gg&gt;.
 // Modified work Copyright 2023 Daan Vanoverloop
 // See the COPYRIGHT file at the top-level directory of this distribution.
@@ -281,7 +292,7 @@
 //!     .parse()?;
 //! let i32_def = keeper.def(&quot;I32&quot;).expect(&quot;has I32 def&quot;);
 //! assert!(i32_def.subclass_of(&quot;I&quot;));
-//! assert_eq!(i32_def.int_value(&quot;bitwidth&quot;), Some(32));
+//! assert_eq!(i32_def.int_value(&quot;bitwidth&quot;), Ok(32));
 //! # Ok(())
 //! # }
 //! ```
@@ -292,16 +303,14 @@
 //! this crate is not stable. Furthermore, the safe wrapper does not provide a
 //! stable interface either, since this crate is still in early development.
 
-/// Module containing error types.
 </span><span class="kw">pub mod </span>error;
-<span class="doccomment">/// TableGen initialization values.
-</span><span class="kw">pub mod </span>init;
+<span class="kw">pub mod </span>init;
 <span class="doccomment">/// TableGen records and record values.
 </span><span class="kw">pub mod </span>record;
 <span class="doccomment">/// TableGen record keeper.
 </span><span class="kw">pub mod </span>record_keeper;
 <span class="kw">mod </span>string_ref;
-<span class="kw">mod </span>test;
+<span class="kw">mod </span>util;
 
 <span class="doccomment">/// This module contains raw bindings for TableGen. Note that these bindings are
 /// unstable and can change at any time.
@@ -317,12 +326,13 @@
 <span class="kw">use </span>std::marker::PhantomData;
 <span class="kw">use </span>std::sync::Mutex;
 
+<span class="kw">pub use </span>error::Error;
+<span class="kw">use </span>error::TableGenError;
 <span class="kw">pub use </span>init::TypedInit;
 <span class="kw">pub use </span>record::Record;
 <span class="kw">pub use </span>record::RecordValue;
 <span class="kw">pub use </span>record_keeper::RecordKeeper;
 
-<span class="kw">use </span>error::{<span class="prelude-ty">Result</span>, TableGenError};
 <span class="kw">use </span>raw::{
     tableGenAddIncludePath, tableGenAddSource, tableGenAddSourceFile, tableGenFree, tableGenGet,
     tableGenParse, TableGenParserRef,
@@ -336,6 +346,7 @@
 
 <span class="doccomment">/// Builder struct that parses TableGen source files and builds a
 /// [`RecordKeeper`].
+</span><span class="attr">#[derive(Debug, PartialEq, Eq)]
 </span><span class="kw">pub struct </span>TableGenParser&lt;<span class="lifetime">&#39;s</span>&gt; {
     raw: TableGenParserRef,
     source_strings: Vec&lt;CString&gt;,
@@ -359,17 +370,17 @@
     }
 
     <span class="doccomment">/// Adds the given path to the list of included directories.
-    </span><span class="kw">pub fn </span>add_include_path(<span class="kw-2">&amp;mut </span><span class="self">self</span>, include: <span class="kw-2">&amp;</span>str) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>add_include_path(<span class="self">self</span>, include: <span class="kw-2">&amp;</span>str) -&gt; <span class="self">Self </span>{
         <span class="kw">unsafe </span>{ tableGenAddIncludePath(<span class="self">self</span>.raw, StringRef::from(include).to_raw()) }
         <span class="self">self
     </span>}
 
     <span class="doccomment">/// Reads TableGen source code from the file at the given path.
-    </span><span class="kw">pub fn </span>add_source_file(<span class="kw-2">&amp;mut </span><span class="self">self</span>, source: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt; {
+    </span><span class="kw">pub fn </span>add_source_file(<span class="self">self</span>, source: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, Error&gt; {
         <span class="kw">if unsafe </span>{ tableGenAddSourceFile(<span class="self">self</span>.raw, StringRef::from(source).to_raw()) &gt; <span class="number">0 </span>} {
             <span class="prelude-val">Ok</span>(<span class="self">self</span>)
         } <span class="kw">else </span>{
-            <span class="prelude-val">Err</span>(TableGenError::AddSource)
+            <span class="prelude-val">Err</span>(TableGenError::InvalidSource.into())
         }
     }
 
@@ -377,19 +388,19 @@
     ///
     /// The string must be null-terminated and is not copied, hence it is
     /// required to live until the source code is parsed.
-    </span><span class="kw">pub fn </span>add_source_raw(<span class="kw-2">&amp;mut </span><span class="self">self</span>, source: <span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span>CStr) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt; {
+    </span><span class="kw">pub fn </span>add_source_raw(<span class="self">self</span>, source: <span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span>CStr) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, Error&gt; {
         <span class="kw">if unsafe </span>{ tableGenAddSource(<span class="self">self</span>.raw, source.as_ptr()) &gt; <span class="number">0 </span>} {
             <span class="prelude-val">Ok</span>(<span class="self">self</span>)
         } <span class="kw">else </span>{
-            <span class="prelude-val">Err</span>(TableGenError::AddSource)
+            <span class="prelude-val">Err</span>(TableGenError::InvalidSource.into())
         }
     }
 
     <span class="doccomment">/// Adds the given TableGen source string.
     ///
     /// The string is copied into a null-terminated [`CString`].
-    </span><span class="kw">pub fn </span>add_source(<span class="kw-2">&amp;mut </span><span class="self">self</span>, source: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt; {
-        <span class="kw">let </span>string = CString::new(source)<span class="question-mark">?</span>;
+    </span><span class="kw">pub fn </span>add_source(<span class="kw-2">mut </span><span class="self">self</span>, source: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, Error&gt; {
+        <span class="kw">let </span>string = CString::new(source).map_err(TableGenError::from)<span class="question-mark">?</span>;
         <span class="self">self</span>.source_strings.push(string);
         <span class="kw">if unsafe </span>{
             tableGenAddSource(
@@ -399,8 +410,12 @@
         </span>} {
             <span class="prelude-val">Ok</span>(<span class="self">self</span>)
         } <span class="kw">else </span>{
-            <span class="prelude-val">Err</span>(TableGenError::AddSource)
+            <span class="prelude-val">Err</span>(TableGenError::InvalidSource.into())
         }
+    }
+
+    <span class="kw">pub fn </span>source_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SourceInfo {
+        SourceInfo(<span class="self">self</span>)
     }
 
     <span class="doccomment">/// Parses the TableGen source files and returns a [`RecordKeeper`].
@@ -408,14 +423,14 @@
     /// Due to limitations of TableGen, parsing TableGen is not thread-safe.
     /// In order to provide thread-safety, this method ensures that any
     /// concurrent parse operations are executed sequentially.
-    </span><span class="kw">pub fn </span>parse(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;RecordKeeper&gt; {
+    </span><span class="kw">pub fn </span>parse(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;RecordKeeper&lt;<span class="lifetime">&#39;s</span>&gt;, Error&gt; {
         <span class="kw">unsafe </span>{
             <span class="kw">let </span>guard = TABLEGEN_PARSE_LOCK.lock().unwrap();
             <span class="kw">let </span>keeper = tableGenParse(<span class="self">self</span>.raw);
             <span class="kw">let </span>res = <span class="kw">if </span>!keeper.is_null() {
-                <span class="prelude-val">Ok</span>(RecordKeeper::from_raw(keeper))
+                <span class="prelude-val">Ok</span>(RecordKeeper::from_raw(keeper, <span class="self">self</span>))
             } <span class="kw">else </span>{
-                <span class="prelude-val">Err</span>(TableGenError::Parse)
+                <span class="prelude-val">Err</span>(TableGenError::Parse.into())
             };
             drop(guard);
             res
@@ -430,4 +445,11 @@
         }
     }
 }
+
+<span class="doccomment">/// Reference to TableGen source file.
+///
+/// See [`TableGenParser::source_info`](TableGenParser::source_info) and
+/// [`RecordKeeper::source_info`](RecordKeeper::source_info).
+</span><span class="attr">#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+</span><span class="kw">pub struct </span>SourceInfo&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TableGenParser&lt;<span class="lifetime">&#39;a</span>&gt;);
 </code></pre></div></section></main></body></html>

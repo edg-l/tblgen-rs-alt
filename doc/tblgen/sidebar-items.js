@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["error","init","raw","record","record_keeper"],"struct":["TableGenParser"]};
+window.SIDEBAR_ITEMS = {"mod":["error","init","raw","record","record_keeper"],"struct":["SourceInfo","TableGenParser"]};

@@ -268,6 +268,8 @@
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
 </pre></div><pre class="rust"><code><span class="comment">// Original work Copyright 2016 Alexander Stocko &lt;as@coder.gg&gt;.
 // Modified work Copyright 2023 Daan Vanoverloop
 // See the COPYRIGHT file at the top-level directory of this distribution.
@@ -291,21 +293,21 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::record::Record;
 <span class="kw">use </span><span class="kw">crate</span>::string_ref::StringRef;
+<span class="kw">use crate</span>::{SourceInfo, TableGenParser};
 
 <span class="doccomment">/// Struct that holds all records from a TableGen file.
-</span><span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>RecordKeeper {
+</span><span class="attr">#[derive(Debug, PartialEq, Eq)]
+</span><span class="kw">pub struct </span>RecordKeeper&lt;<span class="lifetime">&#39;s</span>&gt; {
     raw: TableGenRecordKeeperRef,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) parser: TableGenParser&lt;<span class="lifetime">&#39;s</span>&gt;,
 }
 
-<span class="kw">impl </span>RecordKeeper {
-    <span class="doccomment">/// Creates an owned record keeper from a raw object.
-    ///
-    /// # Safety
-    ///
-    /// The raw object must be valid.
-    </span><span class="kw">pub unsafe fn </span>from_raw(raw: TableGenRecordKeeperRef) -&gt; RecordKeeper {
-        RecordKeeper { raw }
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;s</span>&gt; RecordKeeper&lt;<span class="lifetime">&#39;s</span>&gt; {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">unsafe fn </span>from_raw(
+        raw: TableGenRecordKeeperRef,
+        parser: TableGenParser&lt;<span class="lifetime">&#39;s</span>&gt;,
+    ) -&gt; RecordKeeper&lt;<span class="lifetime">&#39;s</span>&gt; {
+        RecordKeeper { raw, parser }
     }
 
     <span class="doccomment">/// Returns an iterator over all classes.
@@ -356,9 +358,13 @@
             ))
         }
     }
+
+    <span class="kw">pub fn </span>source_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SourceInfo {
+        SourceInfo(<span class="kw-2">&amp;</span><span class="self">self</span>.parser)
+    }
 }
 
-<span class="kw">impl </span>Drop <span class="kw">for </span>RecordKeeper {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;s</span>&gt; Drop <span class="kw">for </span>RecordKeeper&lt;<span class="lifetime">&#39;s</span>&gt; {
     <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">unsafe </span>{
             tableGenRecordKeeperFree(<span class="self">self</span>.raw);
@@ -390,8 +396,7 @@
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>NamedRecordIter&lt;<span class="lifetime">&#39;a</span>, T&gt; {
     raw: TableGenRecordKeeperIteratorRef,
-    _kind: PhantomData&lt;T&gt;,
-    _reference: PhantomData&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>RecordKeeper&gt;,
+    _kind: PhantomData&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>T&gt;,
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T&gt; NamedRecordIter&lt;<span class="lifetime">&#39;a</span>, T&gt; {
@@ -399,7 +404,6 @@
         NamedRecordIter {
             raw,
             _kind: PhantomData,
-            _reference: PhantomData,
         }
     }
 }
@@ -438,7 +442,7 @@
 <span class="kw">pub struct </span>RecordIter&lt;<span class="lifetime">&#39;a</span>&gt; {
     raw: TableGenRecordVectorRef,
     index: usize,
-    _reference: PhantomData&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>RecordKeeper&gt;,
+    _reference: PhantomData&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>()&gt;,
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; RecordIter&lt;<span class="lifetime">&#39;a</span>&gt; {
