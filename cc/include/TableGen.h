@@ -165,7 +165,7 @@ TableGenRecordRef tableGenDefInitGetValue(TableGenTypedInitRef ti);
 void tableGenInitPrint(TableGenTypedInitRef ti,
                          TableGenStringCallback callback, void *userData);
 void tableGenInitDump(TableGenTypedInitRef ti);
-void tableGenPrintError(TableGenParserRef ref, TableGenSourceLocationRef loc_ref, TableGenDiagKind dk,
+TableGenBool tableGenPrintError(TableGenParserRef ref, TableGenSourceLocationRef loc_ref, TableGenDiagKind dk,
                         TableGenStringRef message,
                         TableGenStringCallback callback, void *userData);
 TableGenSourceLocationRef tableGenSourceLocationNull();

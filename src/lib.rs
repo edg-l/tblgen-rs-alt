@@ -76,9 +76,7 @@
 //! this crate is not stable. Furthermore, the safe wrapper does not provide a
 //! stable interface either, since this crate is still in early development.
 
-/// Module containing error types.
 pub mod error;
-/// TableGen initialization values.
 pub mod init;
 /// TableGen records and record values.
 pub mod record;
@@ -101,6 +99,7 @@ use std::ffi::CString;
 use std::marker::PhantomData;
 use std::sync::Mutex;
 
+pub use error::Error;
 use error::TableGenError;
 pub use init::TypedInit;
 pub use record::Record;
@@ -150,11 +149,11 @@ impl<'s> TableGenParser<'s> {
     }
 
     /// Reads TableGen source code from the file at the given path.
-    pub fn add_source_file(self, source: &str) -> Result<Self, TableGenError> {
+    pub fn add_source_file(self, source: &str) -> Result<Self, Error> {
         if unsafe { tableGenAddSourceFile(self.raw, StringRef::from(source).to_raw()) > 0 } {
             Ok(self)
         } else {
-            Err(TableGenError::InvalidSource)
+            Err(TableGenError::InvalidSource.into())
         }
     }
 
@@ -162,19 +161,19 @@ impl<'s> TableGenParser<'s> {
     ///
     /// The string must be null-terminated and is not copied, hence it is
     /// required to live until the source code is parsed.
-    pub fn add_source_raw(self, source: &'s CStr) -> Result<Self, TableGenError> {
+    pub fn add_source_raw(self, source: &'s CStr) -> Result<Self, Error> {
         if unsafe { tableGenAddSource(self.raw, source.as_ptr()) > 0 } {
             Ok(self)
         } else {
-            Err(TableGenError::InvalidSource)
+            Err(TableGenError::InvalidSource.into())
         }
     }
 
     /// Adds the given TableGen source string.
     ///
     /// The string is copied into a null-terminated [`CString`].
-    pub fn add_source(mut self, source: &str) -> Result<Self, TableGenError> {
-        let string = CString::new(source)?;
+    pub fn add_source(mut self, source: &str) -> Result<Self, Error> {
+        let string = CString::new(source).map_err(TableGenError::from)?;
         self.source_strings.push(string);
         if unsafe {
             tableGenAddSource(
@@ -184,8 +183,12 @@ impl<'s> TableGenParser<'s> {
         } {
             Ok(self)
         } else {
-            Err(TableGenError::InvalidSource)
+            Err(TableGenError::InvalidSource.into())
         }
+    }
+
+    pub fn source_info(&self) -> SourceInfo {
+        SourceInfo(self)
     }
 
     /// Parses the TableGen source files and returns a [`RecordKeeper`].
@@ -193,14 +196,14 @@ impl<'s> TableGenParser<'s> {
     /// Due to limitations of TableGen, parsing TableGen is not thread-safe.
     /// In order to provide thread-safety, this method ensures that any
     /// concurrent parse operations are executed sequentially.
-    pub fn parse(self) -> Result<RecordKeeper<'s>, TableGenError<'s>> {
+    pub fn parse(self) -> Result<RecordKeeper<'s>, Error> {
         unsafe {
             let guard = TABLEGEN_PARSE_LOCK.lock().unwrap();
             let keeper = tableGenParse(self.raw);
             let res = if !keeper.is_null() {
                 Ok(RecordKeeper::from_raw(keeper, self))
             } else {
-                Err(TableGenError::Parse)
+                Err(TableGenError::Parse.into())
             };
             drop(guard);
             res
@@ -215,3 +218,10 @@ impl<'s> Drop for TableGenParser<'s> {
         }
     }
 }
+
+/// Reference to TableGen source file.
+///
+/// See [`TableGenParser::source_info`](TableGenParser::source_info) and
+/// [`RecordKeeper::source_info`](RecordKeeper::source_info).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SourceInfo<'a>(pub(crate) &'a TableGenParser<'a>);

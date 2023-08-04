@@ -28,9 +28,7 @@ use crate::{
 };
 use paste::paste;
 
-use crate::{
-    error::InitConversionError, error::TableGenError, record::Record, record_keeper::RecordKeeper,
-};
+use crate::{error::TableGenError, record::Record};
 use std::{
     ffi::c_void,
     fmt::{self, Debug, Display, Formatter},
@@ -53,47 +51,68 @@ pub enum TypedInit<'a> {
     Invalid,
 }
 
-impl<'a> Display for TypedInit<'a> {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+impl<'a> TypedInit<'a> {
+    fn variant_name(&self) -> &'static str {
         match self {
-            TypedInit::Bit(init) => write!(formatter, "{}", &init),
-            TypedInit::Bits(init) => write!(formatter, "{}", &init),
-            TypedInit::Code(init) => write!(formatter, "{}", &init),
-            TypedInit::Int(init) => write!(formatter, "{}", &init),
-            TypedInit::String(init) => write!(formatter, "{}", &init),
-            TypedInit::List(init) => write!(formatter, "{}", &init),
-            TypedInit::Dag(init) => write!(formatter, "{}", &init),
-            TypedInit::Def(init) => write!(formatter, "{}", &init),
-            TypedInit::Invalid => write!(formatter, "Invalid"),
+            TypedInit::Bit(_) => "Bit",
+            TypedInit::Bits(_) => "Bits",
+            TypedInit::Code(_) => "Code",
+            TypedInit::Int(_) => "Int",
+            TypedInit::String(_) => "String",
+            TypedInit::List(_) => "List",
+            TypedInit::Dag(_) => "Dag",
+            TypedInit::Def(_) => "Def",
+            TypedInit::Invalid => "Invalid",
+        }
+    }
+}
+
+impl<'a> Display for TypedInit<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::Bit(init) => write!(f, "{}", &init),
+            Self::Bits(init) => write!(f, "{}", &init),
+            Self::Code(init) => write!(f, "{}", &init),
+            Self::Int(init) => write!(f, "{}", &init),
+            Self::String(init) => write!(f, "{}", &init),
+            Self::List(init) => write!(f, "{}", &init),
+            Self::Dag(init) => write!(f, "{}", &init),
+            Self::Def(init) => write!(f, "{}", &init),
+            Self::Invalid => write!(f, "Invalid"),
         }
     }
 }
 
 impl<'a> Debug for TypedInit<'a> {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        write!(formatter, "TypedInit(")?;
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "TypedInit(")?;
+        let name = self.variant_name();
+        write!(f, "{name}(")?;
         match self {
-            TypedInit::Bit(init) => write!(formatter, "Bit({:#?})", &init),
-            TypedInit::Bits(init) => write!(formatter, "Bits({:#?})", &init),
-            TypedInit::Code(init) => write!(formatter, "Code({:#?})", &init),
-            TypedInit::Int(init) => write!(formatter, "Int({:#?})", &init),
-            TypedInit::String(init) => write!(formatter, "String({:#?})", &init),
-            TypedInit::List(init) => write!(formatter, "List({:#?})", &init),
-            TypedInit::Dag(init) => write!(formatter, "Dag({:#?})", &init),
-            TypedInit::Def(init) => write!(formatter, "Def({:#?})", &init),
-            TypedInit::Invalid => write!(formatter, "Invalid"),
+            Self::Bit(init) => write!(f, "{:#?}", &init),
+            Self::Bits(init) => write!(f, "{:#?}", &init),
+            Self::Code(init) => write!(f, "{:#?}", &init),
+            Self::Int(init) => write!(f, "{:#?}", &init),
+            Self::String(init) => write!(f, "{:#?}", &init),
+            Self::List(init) => write!(f, "{:#?}", &init),
+            Self::Dag(init) => write!(f, "{:#?}", &init),
+            Self::Def(init) => write!(f, "{:#?}", &init),
+            Self::Invalid => write!(f, ""),
         }?;
-        write!(formatter, ")")
+        write!(f, "))")
     }
 }
 
 macro_rules! as_inner {
     ($name:ident, $variant:ident, $type:ty) => {
         paste! {
-            pub fn [<as_ $name>](self) -> Result<$type<'a>, TableGenError<'a>> {
+            pub fn [<as_ $name>](self) -> Result<$type<'a>, TableGenError> {
                 match self {
                     Self::$variant(v) => Ok(v),
-                    _ => Err(TableGenError::from(InitConversionError::new(self, std::any::type_name::<$type>(), None)))
+                    _ => Err(TableGenError::InitConversion {
+                        from: self.variant_name(),
+                        to: std::any::type_name::<$type>()
+                    })
                 }
             }
         }
@@ -103,24 +122,16 @@ macro_rules! as_inner {
 macro_rules! try_into {
     ($variant:ident, $init:ty, $type:ty) => {
         impl<'a> TryFrom<TypedInit<'a>> for $type {
-            type Error = TableGenError<'a>;
+            type Error = TableGenError;
 
             fn try_from(value: TypedInit<'a>) -> Result<Self, Self::Error> {
                 match value {
-                    TypedInit::$variant(v) => Self::try_from(v).map_err(|e| {
-                        InitConversionError::new(
-                            value,
-                            std::any::type_name::<$type>(),
-                            Some(format!("{}", e)),
-                        )
+                    TypedInit::$variant(v) => Ok(Self::try_from(v)?),
+                    _ => Err(TableGenError::InitConversion {
+                        from: value.variant_name(),
+                        to: std::any::type_name::<$type>(),
                     }),
-                    _ => Err(InitConversionError::new(
-                        value,
-                        std::any::type_name::<$type>(),
-                        None,
-                    )),
                 }
-                .map_err(|e| TableGenError::from(e))
             }
         }
     };
@@ -135,44 +146,30 @@ try_into!(List, ListInit<'a>, ListInit<'a>);
 try_into!(Dag, DagInit<'a>, DagInit<'a>);
 
 impl<'a> TryFrom<TypedInit<'a>> for String {
-    type Error = TableGenError<'a>;
+    type Error = TableGenError;
 
     fn try_from(value: TypedInit<'a>) -> Result<Self, Self::Error> {
         match value {
-            TypedInit::String(v) | TypedInit::Code(v) => Self::try_from(v).map_err(|e| {
-                InitConversionError::new(
-                    value,
-                    std::any::type_name::<String>(),
-                    Some(format!("{}", e)),
-                )
+            TypedInit::String(v) | TypedInit::Code(v) => Ok(Self::try_from(v)?),
+            _ => Err(TableGenError::InitConversion {
+                from: value.variant_name(),
+                to: std::any::type_name::<String>(),
             }),
-            _ => Err(InitConversionError::new(
-                value,
-                std::any::type_name::<String>(),
-                None,
-            )),
         }
         .map_err(TableGenError::from)
     }
 }
 
 impl<'a> TryFrom<TypedInit<'a>> for &'a str {
-    type Error = TableGenError<'a>;
+    type Error = TableGenError;
 
     fn try_from(value: TypedInit<'a>) -> Result<Self, Self::Error> {
         match value {
-            TypedInit::String(v) | TypedInit::Code(v) => v.to_str().map_err(|e| {
-                InitConversionError::new(
-                    value,
-                    std::any::type_name::<String>(),
-                    Some(format!("{}", e)),
-                )
+            TypedInit::String(v) | TypedInit::Code(v) => Ok(Self::try_from(v.to_str()?)?),
+            _ => Err(TableGenError::InitConversion {
+                from: value.variant_name(),
+                to: std::any::type_name::<&'a str>(),
             }),
-            _ => Err(InitConversionError::new(
-                value,
-                std::any::type_name::<String>(),
-                None,
-            )),
         }
         .map_err(TableGenError::from)
     }
@@ -194,18 +191,18 @@ impl<'a> TypedInit<'a> {
     ///
     /// The raw object must be valid.
     #[allow(non_upper_case_globals)]
-    pub unsafe fn from_raw(init: TableGenTypedInitRef, keeper: &'a RecordKeeper<'a>) -> Self {
+    pub unsafe fn from_raw(init: TableGenTypedInitRef) -> Self {
         let t = tableGenInitRecType(init);
 
         use TableGenRecTyKind::*;
         match t {
-            TableGenBitRecTyKind => Self::Bit(BitInit::from_raw(init, keeper)),
-            TableGenBitsRecTyKind => Self::Bits(BitsInit::from_raw(init, keeper)),
-            TableGenDagRecTyKind => TypedInit::Dag(DagInit::from_raw(init, keeper)),
-            TableGenIntRecTyKind => TypedInit::Int(IntInit::from_raw(init, keeper)),
-            TableGenListRecTyKind => TypedInit::List(ListInit::from_raw(init, keeper)),
-            TableGenRecordRecTyKind => Self::Def(DefInit::from_raw(init, keeper)),
-            TableGenStringRecTyKind => Self::String(StringInit::from_raw(init, keeper)),
+            TableGenBitRecTyKind => Self::Bit(BitInit::from_raw(init)),
+            TableGenBitsRecTyKind => Self::Bits(BitsInit::from_raw(init)),
+            TableGenDagRecTyKind => TypedInit::Dag(DagInit::from_raw(init)),
+            TableGenIntRecTyKind => TypedInit::Int(IntInit::from_raw(init)),
+            TableGenListRecTyKind => TypedInit::List(ListInit::from_raw(init)),
+            TableGenRecordRecTyKind => Self::Def(DefInit::from_raw(init)),
+            TableGenStringRecTyKind => Self::String(StringInit::from_raw(init)),
             _ => Self::Invalid,
         }
     }
@@ -217,7 +214,6 @@ macro_rules! init {
         pub struct $name<'a> {
             raw: TableGenTypedInitRef,
             _reference: PhantomData<&'a TableGenTypedInitRef>,
-            keeper: &'a RecordKeeper<'a>,
         }
 
         impl<'a> $name<'a> {
@@ -226,14 +222,10 @@ macro_rules! init {
             /// # Safety
             ///
             /// The raw object must be valid.
-            pub unsafe fn from_raw(
-                raw: TableGenTypedInitRef,
-                keeper: &'a RecordKeeper<'a>,
-            ) -> Self {
+            pub unsafe fn from_raw(raw: TableGenTypedInitRef) -> Self {
                 Self {
                     raw,
                     _reference: PhantomData,
-                    keeper,
                 }
             }
         }
@@ -298,7 +290,7 @@ impl<'a> BitsInit<'a> {
     pub fn bit(self, index: usize) -> Option<BitInit<'a>> {
         let bit = unsafe { tableGenBitsInitGetBitInit(self.raw, index) };
         if !bit.is_null() {
-            Some(unsafe { BitInit::from_raw(bit, self.keeper) })
+            Some(unsafe { BitInit::from_raw(bit) })
         } else {
             None
         }
@@ -359,15 +351,15 @@ impl<'a> StringInit<'a> {
 
 init!(DefInit);
 
-impl<'a: 's, 's: 'a> From<DefInit<'a>> for Record<'a> {
+impl<'a> From<DefInit<'a>> for Record<'a> {
     fn from(value: DefInit<'a>) -> Self {
-        unsafe { Record::from_raw(value.keeper, tableGenDefInitGetValue(value.raw)) }
+        unsafe { Record::from_raw(tableGenDefInitGetValue(value.raw)) }
     }
 }
 
 init!(DagInit);
 
-impl<'a: 's, 's: 'a> DagInit<'a> {
+impl<'a> DagInit<'a> {
     /// Returns an iterator over the arguments of the dag.
     ///
     /// The iterator yields tuples `(&str, TypedInit)`.
@@ -380,7 +372,7 @@ impl<'a: 's, 's: 'a> DagInit<'a> {
 
     /// Returns the operator of the dag as a [`Record`].
     pub fn operator(self) -> Record<'a> {
-        unsafe { Record::from_raw(self.keeper, tableGenDagRecordOperator(self.raw)) }
+        unsafe { Record::from_raw(tableGenDagRecordOperator(self.raw)) }
     }
 
     /// Returns the number of arguments for this dag.
@@ -398,7 +390,7 @@ impl<'a: 's, 's: 'a> DagInit<'a> {
     pub fn get(self, index: usize) -> Option<TypedInit<'a>> {
         let value = unsafe { tableGenDagRecordGet(self.raw, index) };
         if !value.is_null() {
-            Some(unsafe { TypedInit::from_raw(value, self.keeper) })
+            Some(unsafe { TypedInit::from_raw(value) })
         } else {
             None
         }
@@ -411,7 +403,7 @@ pub struct DagIter<'a> {
     index: usize,
 }
 
-impl<'a: 's, 's: 'a> Iterator for DagIter<'a> {
+impl<'a> Iterator for DagIter<'a> {
     type Item = (&'a str, TypedInit<'a>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -453,7 +445,7 @@ impl<'a> ListInit<'a> {
     pub fn get(self, index: usize) -> Option<TypedInit<'a>> {
         let value = unsafe { tableGenListRecordGet(self.raw, index) };
         if !value.is_null() {
-            Some(unsafe { TypedInit::from_raw(value, self.keeper) })
+            Some(unsafe { TypedInit::from_raw(value) })
         } else {
             None
         }
@@ -473,7 +465,7 @@ impl<'a> Iterator for ListIter<'a> {
         let next = unsafe { tableGenListRecordGet(self.list.raw, self.index) };
         self.index += 1;
         if !next.is_null() {
-            Some(unsafe { TypedInit::from_raw(next, self.list.keeper) })
+            Some(unsafe { TypedInit::from_raw(next) })
         } else {
             None
         }

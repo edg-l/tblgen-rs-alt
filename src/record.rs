@@ -10,6 +10,7 @@
 
 use paste::paste;
 use std::ffi::c_void;
+use std::marker::PhantomData;
 
 use crate::raw::{
     tableGenRecordGetFirstValue, tableGenRecordGetLoc, tableGenRecordGetName,
@@ -18,9 +19,8 @@ use crate::raw::{
     tableGenRecordValGetValue, tableGenRecordValNext, tableGenRecordValPrint, TableGenRecordRef,
     TableGenRecordValRef,
 };
-use crate::RecordKeeper;
 
-use crate::error::{SourceError, SourceLoc, SourceLocation, TableGenError, WithLocation};
+use crate::error::{Error, SourceLoc, SourceLocation, TableGenError, WithLocation};
 use crate::init::{BitInit, DagInit, ListInit, StringInit, TypedInit};
 use crate::string_ref::StringRef;
 use crate::util::print_callback;
@@ -28,12 +28,13 @@ use std::fmt::{self, Debug, Display, Formatter};
 
 /// An immutable reference to a TableGen record.
 ///
-/// This reference cannot outlive the [`RecordKeeper`] from which it is
+/// This reference cannot outlive the
+/// [`RecordKeeper`](crate::record_keeper::RecordKeeper) from which it is
 /// borrowed.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Record<'a> {
     raw: TableGenRecordRef,
-    keeper: &'a RecordKeeper<'a>,
+    _reference: PhantomData<&'a TableGenRecordRef>,
 }
 
 impl<'a> Display for Record<'a> {
@@ -64,10 +65,7 @@ macro_rules! record_value {
     ($(#[$attr:meta])* $name:ident, $type:ty) => {
         paste! {
             $(#[$attr])*
-            pub fn [<$name _value>]<'n>(self, name: &'n str) -> Result<
-                $type,
-                SourceError<'a, TableGenError<'a>>
-            > {
+            pub fn [<$name _value>]<'n>(self, name: &'n str) -> Result<$type, Error> {
                 self.value(name)?.try_into()
             }
         }
@@ -80,8 +78,11 @@ impl<'a> Record<'a> {
     /// # Safety
     ///
     /// The raw object must be valid.
-    pub unsafe fn from_raw(keeper: &'a RecordKeeper, ptr: TableGenRecordRef) -> Record<'a> {
-        Record { raw: ptr, keeper }
+    pub unsafe fn from_raw(ptr: TableGenRecordRef) -> Record<'a> {
+        Record {
+            raw: ptr,
+            _reference: PhantomData,
+        }
     }
 
     /// Returns the name of the record.
@@ -89,7 +90,7 @@ impl<'a> Record<'a> {
     /// # Errors
     ///
     /// Returns an error if the name is not a valid UTF-8 string.
-    pub fn name(self) -> Result<&'a str, SourceError<'a, TableGenError<'a>>> {
+    pub fn name(self) -> Result<&'a str, Error> {
         unsafe { StringRef::from_raw(tableGenRecordGetName(self.raw)) }
             .try_into()
             .map_err(TableGenError::from)
@@ -162,13 +163,10 @@ impl<'a> Record<'a> {
     );
 
     /// Returns a [`RecordValue`] for the field with the given name.
-    pub fn value<'n>(
-        self,
-        name: &'n str,
-    ) -> Result<RecordValue<'a>, SourceError<'a, TableGenError<'a>>> {
+    pub fn value<'n>(self, name: &'n str) -> Result<RecordValue<'a>, Error> {
         let value = unsafe { tableGenRecordGetValue(self.raw, StringRef::from(name).to_raw()) };
         if !value.is_null() {
-            Ok(unsafe { RecordValue::from_raw(value, self.keeper) })
+            Ok(unsafe { RecordValue::from_raw(value) })
         } else {
             Err(TableGenError::MissingValue(String::from(name)).with_location(self))
         }
@@ -193,16 +191,16 @@ impl<'a> Record<'a> {
     }
 }
 
-impl<'a> SourceLoc<'a> for Record<'a> {
-    fn source_location(self) -> SourceLocation<'a> {
-        unsafe { SourceLocation::from_raw(tableGenRecordGetLoc(self.raw), &self.keeper.parser) }
+impl<'a> SourceLoc for Record<'a> {
+    fn source_location(self) -> SourceLocation {
+        unsafe { SourceLocation::from_raw(tableGenRecordGetLoc(self.raw)) }
     }
 }
 
 macro_rules! try_into {
     ($type:ty) => {
         impl<'a> TryFrom<RecordValue<'a>> for $type {
-            type Error = SourceError<'a, TableGenError<'a>>;
+            type Error = Error;
 
             fn try_from(record_value: RecordValue<'a>) -> Result<Self, Self::Error> {
                 Self::try_from(record_value.init).map_err(|e| e.with_location(record_value))
@@ -233,9 +231,9 @@ impl<'a> From<RecordValue<'a>> for TypedInit<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RecordValue<'a> {
     raw: TableGenRecordValRef,
-    keeper: &'a RecordKeeper<'a>,
     pub name: StringInit<'a>,
     pub init: TypedInit<'a>,
+    _reference: PhantomData<&'a TableGenRecordRef>,
 }
 
 impl<'a> Display for RecordValue<'a> {
@@ -260,21 +258,21 @@ impl<'a> RecordValue<'a> {
     /// # Safety
     ///
     /// The raw object must be valid.
-    pub unsafe fn from_raw(ptr: TableGenRecordValRef, keeper: &'a RecordKeeper) -> Self {
-        let name = StringInit::from_raw(tableGenRecordValGetNameInit(ptr), keeper);
-        let value = TypedInit::from_raw(tableGenRecordValGetValue(ptr), keeper);
+    pub unsafe fn from_raw(ptr: TableGenRecordValRef) -> Self {
+        let name = StringInit::from_raw(tableGenRecordValGetNameInit(ptr));
+        let value = TypedInit::from_raw(tableGenRecordValGetValue(ptr));
         Self {
             name,
-            keeper,
             init: value,
             raw: ptr,
+            _reference: PhantomData,
         }
     }
 }
 
-impl<'a> SourceLoc<'a> for RecordValue<'a> {
-    fn source_location(self) -> SourceLocation<'a> {
-        unsafe { SourceLocation::from_raw(tableGenRecordValGetLoc(self.raw), &self.keeper.parser) }
+impl<'a> SourceLoc for RecordValue<'a> {
+    fn source_location(self) -> SourceLocation {
+        unsafe { SourceLocation::from_raw(tableGenRecordValGetLoc(self.raw)) }
     }
 }
 
@@ -282,7 +280,7 @@ impl<'a> SourceLoc<'a> for RecordValue<'a> {
 pub struct RecordValueIter<'a> {
     record: TableGenRecordRef,
     current: TableGenRecordValRef,
-    keeper: &'a RecordKeeper<'a>,
+    _reference: PhantomData<&'a TableGenRecordRef>,
 }
 
 impl<'a> RecordValueIter<'a> {
@@ -291,7 +289,7 @@ impl<'a> RecordValueIter<'a> {
             RecordValueIter {
                 record: record.raw,
                 current: tableGenRecordGetFirstValue(record.raw),
-                keeper: record.keeper,
+                _reference: PhantomData,
             }
         }
     }
@@ -304,7 +302,7 @@ impl<'a> Iterator for RecordValueIter<'a> {
         let res = if self.current.is_null() {
             None
         } else {
-            unsafe { Some(RecordValue::from_raw(self.current, self.keeper)) }
+            unsafe { Some(RecordValue::from_raw(self.current)) }
         };
         self.current = unsafe { tableGenRecordValNext(self.record, self.current) };
         res
@@ -407,44 +405,56 @@ mod tests {
         }
     }
 
-    // #[test]
-    // fn print_error() {
-    //     let rk = TableGenParser::new()
-    //         .add_source_file("test.td")
-    //         // .add_source(
-    //         //     r#"
-    //         //     class C<int test> {
-    //         //         int a = test;
-    //         //     }
-    //         //     def A : C<4> {
-    //         //         string n = "hello";
-    //         //     }
-    //         //     "#,
-    //         // )
-    //         .unwrap()
-    //         .parse()
-    //         .expect("valid tablegen");
-    //     let a = rk.def("A").expect("def A exists");
-    //     let values = a.values();
-    //     assert_eq!(values.clone().count(), 2);
-    //     for v in values {
-    //         // let string: String = v.try_into().unwrap();
-    //         match TryInto::<String>::try_into(v) {
-    //             Ok(s) => println!("{}", s),
-    //             Err(e) => println!("{}", e),
-    //         };
-    //         match v.init {
-    //             TypedInit::Int(i) => {
-    //                 assert_eq!(v.name.to_str(), Ok("a"));
-    //                 assert_eq!(i64::from(i), 4);
-    //             }
-    //             TypedInit::String(i) => {
-    //                 assert_eq!(v.name.to_str(), Ok("n"));
-    //                 assert_eq!(i.to_str(), Ok("hello"));
-    //             }
-    //             _ => panic!("unexpected type"),
-    //         }
-    //     }
-    //     assert!(false)
-    // }
+    #[test]
+    fn print_error() {
+        let rk = TableGenParser::new()
+            .add_source(
+                r#"
+                class C<int test> {
+                    int a = test;
+                }
+                def A : C<4>;
+                "#,
+            )
+            .unwrap()
+            .parse()
+            .expect("valid tablegen");
+        let a = rk.def("A").expect("def A exists");
+        if let Err(e) = a.string_value("a") {
+            // With source info
+            assert_eq!(
+                format!("{}", e.clone().add_source_info(rk.source_info())).trim(),
+                r#"
+                  error: invalid conversion from Int to alloc::string::String
+                    int a = test;
+                        ^
+                "#
+                .trim()
+            );
+
+            // Without source info
+            drop(rk);
+            assert_eq!(
+                format!("{}", e).trim(),
+                r#"
+                  invalid conversion from Int to alloc::string::String
+                "#
+                .trim()
+            );
+
+            // With incorrect source info
+            let rk = TableGenParser::new()
+                .add_source("def A;")
+                .unwrap()
+                .parse()
+                .expect("valid tablegen");
+            assert_eq!(
+                format!("{}", e.add_source_info(rk.source_info())).trim(),
+                "invalid conversion from Int to alloc::string::String\nfailed to print source information: invalid source location"
+                .trim()
+            );
+        } else {
+            panic!("expected error")
+        }
+    }
 }

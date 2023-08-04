@@ -151,20 +151,31 @@ void tableGenInitPrint(TableGenTypedInitRef ti, TableGenStringCallback callback,
 
 void tableGenInitDump(TableGenTypedInitRef ti) { unwrap(ti)->dump(); }
 
-void tableGenPrintError(TableGenParserRef ref, TableGenSourceLocationRef loc_ref, TableGenDiagKind dk,
+TableGenBool tableGenPrintError(TableGenParserRef ref, TableGenSourceLocationRef loc_ref, TableGenDiagKind dk,
                         TableGenStringRef message,
                         TableGenStringCallback callback, void *userData) {
   ctablegen::CallbackOstream stream(callback, userData);
   ArrayRef<SMLoc> Loc = *unwrap(loc_ref);
+
   SMLoc NullLoc;
   if (Loc.empty())
     Loc = NullLoc;
   auto &SrcMgr = unwrap(ref)->sourceMgr;
+
+  if (!SrcMgr.FindBufferContainingLoc(Loc.front()))
+    return false;
+
   SrcMgr.PrintMessage(stream, Loc.front(), static_cast<SourceMgr::DiagKind>(dk),
                       StringRef(message.data, message.len));
-  for (unsigned i = 1; i < Loc.size(); ++i)
-    SrcMgr.PrintMessage(stream, Loc.front(), llvm::SourceMgr::DK_Note,
+
+  for (unsigned i = 1; i < Loc.size(); ++i) {
+    if (!SrcMgr.FindBufferContainingLoc(Loc[i]))
+      continue;
+    SrcMgr.PrintMessage(stream, Loc[i], llvm::SourceMgr::DK_Note,
                         "initiated from multiclass");
+  }
+
+  return true;
 }
 
 TableGenSourceLocationRef tableGenSourceLocationNull() {

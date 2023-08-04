@@ -7,11 +7,63 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! This module contains error types used by this crate and provides additional
+//! error handling utilities for dependent crates.
+//!
+//! Disclaimer: this module may change significantly in the future.
+//!
+//! All different error types are defined in the [`TableGenError`] enum.
+//! However, most functions return a [`SourceError<TableGenError>`] (has alias
+//! [`Error`]). This error type includes a [`SourceLocation`], a reference to a
+//! line in a TableGen source file.
+//!
+//! To provide information about the source code at this location (e.g. code at
+//! location, file name, line and column), [`SourceInfo`] must be provided to
+//! the error. In this case, the error message will be formatted by LLVM's
+//! `SourceMgr` class.
+//!
+//! ```rust
+//! use tblgen::{TableGenParser, RecordKeeper};
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let keeper: RecordKeeper = TableGenParser::new()
+//!     .add_source(
+//!         r#"
+//!         def A {
+//!             int i = 5;
+//!         }
+//!         "#,
+//!     )?
+//!     .parse()?;
+//! if let Err(e) = keeper.def("A").unwrap().string_value("i") {
+//!     println!("{}", e);
+//!     // invalid conversion from Int to alloc::string::String
+//!
+//!     println!("{}", e.add_source_info(keeper.source_info()));
+//!     // error: invalid conversion from Int to alloc::string::String
+//!     //   int a = test;
+//!     //       ^
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! Note that `add_source_info` should be called with the correct source info.
+//! This is not statically enforced, but runtime checks are implemented to check
+//! that the given [`SourceInfo`] matches the [`SourceLocation`] in the error.
+//! If it does not match, the error will be printed without information about
+//! the TableGen source file.
+//!
+//! Custom error types that implement [`std::error::Error`] also implement
+//! [`WithLocation`]. That way, a [`SourceLocation`] can be attached to any
+//! error by calling [`with_location`](`WithLocation::with_location`).
+
 use std::{
-    error::Error,
+    convert::Infallible,
     ffi::{c_void, NulError},
     fmt::{self, Display, Formatter},
     str::Utf8Error,
+    string::FromUtf8Error,
 };
 
 use crate::{
@@ -20,174 +72,203 @@ use crate::{
         tableGenSourceLocationNull, TableGenDiagKind::TABLEGEN_DK_ERROR, TableGenSourceLocationRef,
     },
     string_ref::StringRef,
-    util::print_callback,
-    TableGenParser, TypedInit,
+    util::print_string_callback,
+    SourceInfo, TableGenParser,
 };
 
-#[derive(thiserror::Error, Debug, PartialEq, Eq)]
-pub enum TableGenError<'a> {
+/// Enum of TableGen errors.
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+pub enum TableGenError {
     #[error("invalid TableGen source")]
     InvalidSource,
     #[error("invalid TableGen source")]
     InvalidSourceString(#[from] NulError),
     #[error("invalid UTF-8 string")]
-    InvalidUtf8String(#[from] Utf8Error),
+    InvalidUtf8Str(#[from] Utf8Error),
+    #[error("invalid UTF-8 string")]
+    InvalidUtf8String(#[from] FromUtf8Error),
     #[error("failed to parse TableGen source")]
     Parse,
     #[error("expected field {0} in record")]
     MissingValue(String),
-    #[error(transparent)]
-    InitConversion(InitConversionError<'a>),
+    #[error("invalid conversion from {from} to {to}")]
+    InitConversion {
+        from: &'static str,
+        to: &'static str,
+    },
+    #[error("invalid source location")]
+    InvalidSourceLocation,
+    #[error("infallible")]
+    Infallible(#[from] Infallible),
 }
 
-impl<'a> From<InitConversionError<'a>> for TableGenError<'a> {
-    fn from(value: InitConversionError<'a>) -> Self {
-        TableGenError::InitConversion(value)
-    }
-}
-
+/// A location in a TableGen source file.
 #[derive(Debug, PartialEq, Eq)]
-pub struct InitConversionError<'a> {
-    init: TypedInit<'a>,
-    target: &'static str,
-    error: Option<String>,
-}
-
-impl<'a> InitConversionError<'a> {
-    pub fn new(init: TypedInit<'a>, target: &'static str, error: Option<String>) -> Self {
-        Self {
-            init,
-            target,
-            error,
-        }
-    }
-
-    pub fn init(&self) -> TypedInit<'a> {
-        self.init
-    }
-
-    pub fn target_type(&self) -> &str {
-        self.target
-    }
-
-    pub fn inner_error(&self) -> Option<&str> {
-        self.error.as_deref()
-    }
-}
-
-impl<'a> Display for InitConversionError<'a> {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        if let Some(error) = self.inner_error() {
-            write!(
-                formatter,
-                "while converting from {:?} to {}: {}",
-                self.init, self.target, error
-            )
-        } else {
-            write!(
-                formatter,
-                "invalid conversion from {:?} to {}",
-                self.init, self.target
-            )
-        }
-    }
-}
-
-impl<'a> Error for InitConversionError<'a> {}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct SourceLocation<'s> {
+pub struct SourceLocation {
     raw: TableGenSourceLocationRef,
-    parser: &'s TableGenParser<'s>,
 }
 
-impl<'s> SourceLocation<'s> {
-    pub unsafe fn from_raw(raw: TableGenSourceLocationRef, parser: &'s TableGenParser<'s>) -> Self {
-        Self { raw, parser }
+// SourceLocation is a read-only llvm::ArrayRef, which should be thread-safe.
+unsafe impl Sync for SourceLocation {}
+unsafe impl Send for SourceLocation {}
+
+impl SourceLocation {
+    pub unsafe fn from_raw(raw: TableGenSourceLocationRef) -> Self {
+        Self { raw }
     }
 
-    pub fn none(parser: &'s TableGenParser<'s>) -> Self {
+    /// Returns a [`SourceLocation`] for an undetermined location in the
+    /// TableGen source file.
+    pub fn none() -> Self {
         unsafe {
             Self {
                 raw: tableGenSourceLocationNull(),
-                parser,
             }
         }
     }
 }
 
-impl<'s> Clone for SourceLocation<'s> {
+impl Clone for SourceLocation {
     fn clone(&self) -> Self {
-        unsafe { Self::from_raw(tableGenSourceLocationClone(self.raw), self.parser) }
+        unsafe { Self::from_raw(tableGenSourceLocationClone(self.raw)) }
     }
 }
 
-impl<'s> Drop for SourceLocation<'s> {
+impl Drop for SourceLocation {
     fn drop(&mut self) {
         unsafe { tableGenSourceLocationFree(self.raw) }
     }
 }
 
+/// A wrapper around error types which includes a [`SourceLocation`].
+///
+/// This error is used to describe erros in the TableGen source file at a
+/// certain location.
+///
+/// By calling `add_source_info`, information about the TableGen source file at
+/// the [`SourceLocation`] will be included in this error.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SourceError<'s, E> {
-    location: SourceLocation<'s>,
+pub struct SourceError<E> {
+    location: SourceLocation,
+    message: Option<String>,
     error: E,
 }
 
-impl<'s, E: Error> SourceError<'s, E> {
-    pub fn new(location: SourceLocation<'s>, error: E) -> Self {
-        Self { location, error }
+impl<E: std::error::Error> SourceError<E> {
+    /// Creates a new [`SourceError`].
+    pub fn new(location: SourceLocation, error: E) -> Self {
+        Self {
+            location,
+            error,
+            message: None,
+        }
     }
 
     pub fn location(&self) -> &SourceLocation {
         &self.location
     }
 
-    pub fn map<E2>(self, map: impl FnOnce(E) -> E2) -> SourceError<'s, E2> {
+    pub fn error(&self) -> &E {
+        &self.error
+    }
+
+    /// Replaces the inner error with the given error.
+    ///
+    /// Any source information that was previously attached with
+    /// [`SourceError::add_source_info`] will be removed.
+    pub fn set_error<F: std::error::Error>(self, error: F) -> SourceError<F> {
         SourceError {
+            error,
+            message: None,
             location: self.location,
-            error: map(self.error),
         }
     }
-}
 
-impl<'s, E: Error> Display for SourceError<'s, E> {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        let mut data = (formatter, Ok(()));
+    /// Replaces the location.
+    ///
+    /// Any source information that was previously attached with
+    /// [`SourceError::add_source_info`] will be removed.
+    pub fn set_location(mut self, location: SourceLocation) -> Self {
+        self.location = location;
+        self
+    }
 
-        unsafe {
+    /// Adds information about the TableGen source file at the
+    /// given [`SourceLocation`] to this error.
+    ///
+    /// A new error message will be created by `SourceMgr` class of LLVM.
+    pub fn add_source_info(mut self, info: SourceInfo) -> Self {
+        self.message = Some(Self::create_message(
+            info.0,
+            &self.location,
+            &format!("{}", self.error),
+        ));
+        self
+    }
+
+    fn create_message(parser: &TableGenParser, location: &SourceLocation, message: &str) -> String {
+        let mut data: (_, Result<_, TableGenError>) = (String::new(), Ok(()));
+        let res = unsafe {
             tableGenPrintError(
-                self.location.parser.raw,
-                self.location.raw,
+                parser.raw,
+                location.raw,
                 TABLEGEN_DK_ERROR,
-                StringRef::from(format!("{}", self.error).as_str()).to_raw(),
-                Some(print_callback),
+                StringRef::from(message).to_raw(),
+                Some(print_string_callback),
                 &mut data as *mut _ as *mut c_void,
-            );
+            )
+        };
+        if res == 0 {
+            data.1 = Err(TableGenError::InvalidSourceLocation);
         }
-
-        data.1
+        if let Err(e) = data.1 {
+            data.0 = format!("{}\nfailed to print source information: {}", message, e);
+        }
+        data.0
     }
 }
 
-impl<'s, E: Error> Error for SourceError<'s, E> {}
+impl<E: std::error::Error> Display for SourceError<E> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        if let Some(message) = self.message.as_ref() {
+            write!(f, "{}", message)
+        } else {
+            write!(f, "{}", self.error)
+        }
+    }
+}
 
-pub trait WithLocation: Error + Sized {
+impl<E: std::error::Error + 'static> std::error::Error for SourceError<E> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
+
+impl From<TableGenError> for SourceError<TableGenError> {
+    fn from(value: TableGenError) -> Self {
+        value.with_location(SourceLocation::none())
+    }
+}
+
+pub trait WithLocation: std::error::Error + Sized {
     /// Creates a [`SourceError`] wrapper.
-    fn with_location<'s, L: SourceLoc<'s>>(self, location: L) -> SourceError<'s, Self> {
+    fn with_location<L: SourceLoc>(self, location: L) -> SourceError<Self> {
         SourceError::new(location.source_location(), self)
     }
 }
 
-impl<E> WithLocation for E where E: Error {}
+impl<E> WithLocation for E where E: std::error::Error {}
 
-pub trait SourceLoc<'s> {
+pub trait SourceLoc {
     /// Returns the source location.
-    fn source_location(self) -> SourceLocation<'s>;
+    fn source_location(self) -> SourceLocation;
 }
 
-impl<'s> SourceLoc<'s> for SourceLocation<'s> {
-    fn source_location(self) -> SourceLocation<'s> {
+impl SourceLoc for SourceLocation {
+    fn source_location(self) -> SourceLocation {
         self
     }
 }
+
+/// Main error type.
+pub type Error = SourceError<TableGenError>;
