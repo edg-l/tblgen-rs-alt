@@ -10,6 +10,6 @@ Read the documentation at https://danacus.gitlab.io/tblgen-rs/tblgen/.
 
 ## Supported LLVM Versions
 
-An installation of LLVM is required to use this crate. This crate only aims to support the latest version of LLVM. The version of LLVM currently supported is 17.x.x.
+An installation of LLVM is required to use this crate. Both LLVM 16 and 17 are supported and can be selected using feature flags.
 
-The 1TABLEGEN_170_PREFIX` environment variable can be used to specify a custom directory of the LLVM installation.
+The `TABLEGEN_<version>_PREFIX` environment variable can be used to specify a custom directory of the LLVM installation.
