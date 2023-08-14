@@ -6,6 +6,9 @@ use std::{
     str,
 };
 
+#[cfg(feature = "llvm16-0")]
+const LLVM_MAJOR_VERSION: usize = 16;
+#[cfg(feature = "llvm17-0")]
 const LLVM_MAJOR_VERSION: usize = 17;
 
 fn main() {

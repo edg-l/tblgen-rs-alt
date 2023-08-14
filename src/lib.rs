@@ -22,11 +22,12 @@
 //! # Supported LLVM Versions
 //!
 //! An installation of LLVM is required to use this crate.
-//! This crate only aims to support the latest version of LLVM. The version of
-//! LLVM currently supported is 17.x.x.
+//! The versions of LLVM currently supported are 16.x.x (default) and 17.x.x.
+//! Different LLVM version can be selected using features flags (llvm16-0 or
+//! llvm17-0).
 //!
-//! The `TABLEGEN_170_PREFIX` environment variable can be used to specify a
-//! custom directory of the LLVM installation.
+//! The `TABLEGEN_<version>_PREFIX` environment variable can be used to specify
+//! a custom directory of the LLVM installation.
 //!
 //! # Examples
 //!
