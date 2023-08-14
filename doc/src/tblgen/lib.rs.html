@@ -225,6 +225,7 @@
 <a href="#225" id="225">225</a>
 <a href="#226" id="226">226</a>
 <a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
 </pre></div><pre class="rust"><code><span class="comment">// Original work Copyright 2016 Alexander Stocko &lt;as@coder.gg&gt;.
 // Modified work Copyright 2023 Daan Vanoverloop
 // See the COPYRIGHT file at the top-level directory of this distribution.
@@ -249,11 +250,12 @@
 //! # Supported LLVM Versions
 //!
 //! An installation of LLVM is required to use this crate.
-//! This crate only aims to support the latest version of LLVM. The version of
-//! LLVM currently supported is 17.x.x.
+//! The versions of LLVM currently supported are 16.x.x (default) and 17.x.x.
+//! Different LLVM version can be selected using features flags (llvm16-0 or
+//! llvm17-0).
 //!
-//! The `TABLEGEN_170_PREFIX` environment variable can be used to specify a
-//! custom directory of the LLVM installation.
+//! The `TABLEGEN_&lt;version&gt;_PREFIX` environment variable can be used to specify
+//! a custom directory of the LLVM installation.
 //!
 //! # Examples
 //!

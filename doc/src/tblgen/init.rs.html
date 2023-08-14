@@ -587,6 +587,12 @@
 <a href="#587" id="587">587</a>
 <a href="#588" id="588">588</a>
 <a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a>
+<a href="#591" id="591">591</a>
+<a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
 </pre></div><pre class="rust"><code><span class="comment">// Original work Copyright 2016 Alexander Stocko &lt;as@coder.gg&gt;.
 // Modified work Copyright 2023 Daan Vanoverloop
 // See the COPYRIGHT file at the top-level directory of this distribution.
@@ -617,7 +623,7 @@
 };
 <span class="kw">use </span>paste::paste;
 
-<span class="kw">use crate</span>::{error::TableGenError, record::Record};
+<span class="kw">use crate</span>::{error::Error, error::TableGenError, record::Record};
 <span class="kw">use </span>std::{
     ffi::c_void,
     fmt::{<span class="self">self</span>, Debug, Display, Formatter},
@@ -695,38 +701,39 @@
 <span class="macro">macro_rules! </span>as_inner {
     (<span class="macro-nonterminal">$name</span>:ident, <span class="macro-nonterminal">$variant</span>:ident, <span class="macro-nonterminal">$</span><span class="kw">type</span>:<span class="macro-nonterminal">ty</span>) =&gt; {
         <span class="macro">paste! </span>{
-            <span class="kw">pub fn </span>[&lt;as_ <span class="macro-nonterminal">$name</span>&gt;](<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="macro-nonterminal">$</span><span class="kw">type</span>&lt;<span class="lifetime">&#39;a</span>&gt;, <span class="macro-nonterminal">TableGenError</span>&gt; {
+            <span class="kw">pub fn </span>[&lt;as_ <span class="macro-nonterminal">$name</span>&gt;](<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="macro-nonterminal">$</span><span class="kw">type</span>&lt;<span class="lifetime">&#39;a</span>&gt;, <span class="macro-nonterminal">Error</span>&gt; {
                 <span class="kw">match </span><span class="self">self </span>{
                     <span class="self">Self</span>::<span class="macro-nonterminal">$variant</span>(v) =&gt; <span class="prelude-val">Ok</span>(v),
                     <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(TableGenError::InitConversion {
                         from: <span class="self">self</span>.variant_name(),
                         to: std::any::type_name::&lt;<span class="macro-nonterminal">$</span><span class="kw">type</span>&gt;()
-                    })
+                    }.<span class="macro-nonterminal">into</span>())
                 }
             }
         }
     };
 }
 
-<span class="macro">macro_rules! </span><span class="macro-nonterminal">try_into </span>{
+<span class="macro">macro_rules! </span>try_into {
     (<span class="macro-nonterminal">$variant</span>:ident, <span class="macro-nonterminal">$init</span>:ty, <span class="macro-nonterminal">$</span><span class="kw">type</span>:<span class="macro-nonterminal">ty</span>) =&gt; {
         <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; TryFrom&lt;TypedInit&lt;<span class="lifetime">&#39;a</span>&gt;&gt; <span class="kw">for </span><span class="macro-nonterminal">$</span><span class="kw">type </span>{
-            <span class="kw">type </span><span class="macro-nonterminal">Error </span>= TableGenError;
+            <span class="kw">type </span><span class="macro-nonterminal">Error </span>= Error;
 
             <span class="kw">fn </span>try_from(value: TypedInit&lt;<span class="lifetime">&#39;a</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
                 <span class="kw">match </span>value {
-                    TypedInit::<span class="macro-nonterminal">$variant</span>(v) =&gt; <span class="prelude-val">Ok</span>(<span class="self">Self</span>::try_from(v)<span class="question-mark">?</span>),
+                    TypedInit::<span class="macro-nonterminal">$variant</span>(v) =&gt; <span class="prelude-val">Ok</span>(<span class="self">Self</span>::try_from(v).map_err(TableGenError::from)<span class="question-mark">?</span>),
                     <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(TableGenError::InitConversion {
                         from: value.variant_name(),
                         to: std::any::type_name::&lt;<span class="macro-nonterminal">$</span><span class="kw">type</span>&gt;(),
-                    }),
+                    }
+                    .<span class="macro-nonterminal">into</span>()),
                 }
             }
         }
     };
 }
 
-<span class="macro">try_into!</span>(<span class="macro-nonterminal">Bit</span>, BitInit&lt;<span class="lifetime">&#39;a</span>&gt;, bool);
+<span class="macro">try_into!</span>(Bit, BitInit&lt;<span class="lifetime">&#39;a</span>&gt;, bool);
 <span class="macro">try_into!</span>(Bits, BitsInit&lt;<span class="lifetime">&#39;a</span>&gt;, Vec&lt;BitInit&lt;<span class="lifetime">&#39;a</span>&gt;&gt;);
 <span class="macro">try_into!</span>(Bits, BitsInit&lt;<span class="lifetime">&#39;a</span>&gt;, Vec&lt;bool&gt;);
 <span class="macro">try_into!</span>(Int, IntInit&lt;<span class="lifetime">&#39;a</span>&gt;, i64);
@@ -735,32 +742,37 @@
 <span class="macro">try_into!</span>(Dag, DagInit&lt;<span class="lifetime">&#39;a</span>&gt;, DagInit&lt;<span class="lifetime">&#39;a</span>&gt;);
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; TryFrom&lt;TypedInit&lt;<span class="lifetime">&#39;a</span>&gt;&gt; <span class="kw">for </span>String {
-    <span class="kw">type </span>Error = TableGenError;
+    <span class="kw">type </span>Error = Error;
 
     <span class="kw">fn </span>try_from(value: TypedInit&lt;<span class="lifetime">&#39;a</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
         <span class="kw">match </span>value {
-            TypedInit::String(v) | TypedInit::Code(v) =&gt; <span class="prelude-val">Ok</span>(<span class="self">Self</span>::try_from(v)<span class="question-mark">?</span>),
+            TypedInit::String(v) | TypedInit::Code(v) =&gt; {
+                <span class="prelude-val">Ok</span>(<span class="self">Self</span>::try_from(v).map_err(TableGenError::from)<span class="question-mark">?</span>)
+            }
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(TableGenError::InitConversion {
                 from: value.variant_name(),
                 to: std::any::type_name::&lt;String&gt;(),
-            }),
+            }
+            .into()),
         }
-        .map_err(TableGenError::from)
     }
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; TryFrom&lt;TypedInit&lt;<span class="lifetime">&#39;a</span>&gt;&gt; <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str {
-    <span class="kw">type </span>Error = TableGenError;
+    <span class="kw">type </span>Error = Error;
 
     <span class="kw">fn </span>try_from(value: TypedInit&lt;<span class="lifetime">&#39;a</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
         <span class="kw">match </span>value {
-            TypedInit::String(v) | TypedInit::Code(v) =&gt; <span class="prelude-val">Ok</span>(<span class="self">Self</span>::try_from(v.to_str()<span class="question-mark">?</span>)<span class="question-mark">?</span>),
+            TypedInit::String(v) | TypedInit::Code(v) =&gt; {
+                <span class="prelude-val">Ok</span>(<span class="self">Self</span>::try_from(v.to_str().map_err(TableGenError::from)<span class="question-mark">?</span>)
+                    .map_err(TableGenError::from)<span class="question-mark">?</span>)
+            }
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(TableGenError::InitConversion {
                 from: value.variant_name(),
                 to: std::any::type_name::&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str&gt;(),
-            }),
+            }
+            .into()),
         }
-        .map_err(TableGenError::from)
     }
 }
 

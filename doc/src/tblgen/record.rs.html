@@ -663,7 +663,7 @@
             <span class="kw">type </span><span class="macro-nonterminal">Error </span>= Error;
 
             <span class="kw">fn </span>try_from(record_value: RecordValue&lt;<span class="lifetime">&#39;a</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
-                <span class="self">Self</span>::try_from(record_value.init).map_err(|e| e.with_location(record_value))
+                <span class="self">Self</span>::try_from(record_value.init).map_err(|e| e.set_location(record_value))
             }
         }
     };
@@ -826,7 +826,7 @@
             a.value(<span class="string">&quot;size&quot;</span>)
                 .and_then(|v| {
                     <span class="macro">assert!</span>(v.name.to_str() == <span class="prelude-val">Ok</span>(<span class="string">&quot;size&quot;</span>));
-                    v.init.as_int().map_err(|e| e.with_location(v))
+                    v.init.as_int().map_err(|e| e.set_location(v))
                 })
                 .map(|i| i.into()),
             <span class="prelude-val">Ok</span>(<span class="number">42</span>)
