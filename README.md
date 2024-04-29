@@ -1,5 +1,8 @@
 # tblgen
 
+This is a updated (LLVM 18) fork of https://gitlab.com/Danacus/tblgen-rs.
+Original author: Daan Vanoverloop.
+
 This crate provides raw bindings and a safe wrapper for TableGen, a domain-specific language used by the LLVM project.
 
 The goal of this crate is to enable users to develop custom TableGen backends in Rust. Hence the primary use case of this crate are procedural macros that generate Rust code from TableGen description files.
