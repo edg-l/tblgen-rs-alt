@@ -35,7 +35,7 @@
 //! iterates over classes and defs defined in this file.
 //!
 //! ```rust
-//! use tblgen::{TableGenParser, RecordKeeper};
+//! use tblgen_alt::{TableGenParser, RecordKeeper};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let keeper: RecordKeeper = TableGenParser::new()
@@ -56,7 +56,7 @@
 //! By adding include paths, external TableGen files can be included.
 //!
 //! ```rust
-//! use tblgen::{TableGenParser, RecordKeeper};
+//! use tblgen_alt::{TableGenParser, RecordKeeper};
 //! use std::path::Path;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -169,8 +169,7 @@ impl<'a> TryFrom<TypedInit<'a>> for &'a str {
     fn try_from(value: TypedInit<'a>) -> Result<Self, Self::Error> {
         match value {
             TypedInit::String(v) | TypedInit::Code(v) => {
-                Ok(Self::try_from(v.to_str().map_err(TableGenError::from)?)
-                    .map_err(TableGenError::from)?)
+                Ok(v.to_str().map_err(TableGenError::from)?)
             }
             _ => Err(TableGenError::InitConversion {
                 from: value.variant_name(),

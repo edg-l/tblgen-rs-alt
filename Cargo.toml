@@ -1,15 +1,15 @@
 [package]
-name = "tblgen"
+name = "tblgen-alt"
 version = "0.3.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-description = "Safe Rust bindings for TableGen."
-repository = "https://gitlab.com/Danacus/tblgen-rs"
+description = "Safe Rust bindings for TableGen. Alternative updated version."
+repository = "https://github.com/edg-l/tblgen-rs-alt"
 documentation = "https://danacus.gitlab.io/tblgen-rs/tblgen/"
 exclude = ["doc/"]
 
 [features]
-default = ["llvm16-0"]
+default = ["llvm18-0"]
 llvm16-0 = []
 llvm17-0 = []
 llvm18-0 = []

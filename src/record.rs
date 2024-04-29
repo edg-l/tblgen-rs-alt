@@ -65,7 +65,7 @@ macro_rules! record_value {
     ($(#[$attr:meta])* $name:ident, $type:ty) => {
         paste! {
             $(#[$attr])*
-            pub fn [<$name _value>]<'n>(self, name: &'n str) -> Result<$type, Error> {
+            pub fn [<$name _value>](self, name: &str) -> Result<$type, Error> {
                 self.value(name)?.try_into()
             }
         }
