@@ -10,6 +10,8 @@ use std::{
 const LLVM_MAJOR_VERSION: usize = 16;
 #[cfg(feature = "llvm17-0")]
 const LLVM_MAJOR_VERSION: usize = 17;
+#[cfg(feature = "llvm18-0")]
+const LLVM_MAJOR_VERSION: usize = 18;
 
 fn main() {
     if let Err(error) = run() {
@@ -98,7 +100,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         .clang_arg(format!("-I{}", "cc/include"))
         .clang_arg(format!("-I{}", llvm_config("--includedir")?))
         .default_enum_style(bindgen::EnumVariation::ModuleConsts)
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .unwrap()
         .write_to_file(Path::new(&env::var("OUT_DIR")?).join("bindings.rs"))?;
