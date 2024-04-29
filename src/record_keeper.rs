@@ -10,6 +10,9 @@
 
 use std::marker::PhantomData;
 
+#[cfg(feature = "llvm18-0")]
+use crate::error::TableGenError;
+#[cfg(any(feature = "llvm16-0", feature = "llvm17-0"))]
 use crate::error::{SourceLocation, TableGenError, WithLocation};
 use crate::raw::{
     tableGenRecordKeeperFree, tableGenRecordKeeperGetAllDerivedDefinitions,
