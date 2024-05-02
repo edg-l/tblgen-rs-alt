@@ -62,7 +62,7 @@
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let keeper: RecordKeeper = TableGenParser::new()
 //!     .add_source(r#"include "mlir/IR/OpBase.td""#)?
-//!     .add_include_path(&format!("{}/include", std::env::var("TABLEGEN_170_PREFIX")?))
+//!     .add_include_path(&format!("{}/include", std::env::var("TABLEGEN_180_PREFIX")?))
 //!     .parse()?;
 //! let i32_def = keeper.def("I32").expect("has I32 def");
 //! assert!(i32_def.subclass_of("I"));
