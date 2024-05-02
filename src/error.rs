@@ -118,6 +118,8 @@ unsafe impl Sync for SourceLocation {}
 unsafe impl Send for SourceLocation {}
 
 impl SourceLocation {
+    /// # Safety
+    /// The passed pointer should be a valid table gen source location.
     pub unsafe fn from_raw(raw: TableGenSourceLocationRef) -> Self {
         Self { raw }
     }
