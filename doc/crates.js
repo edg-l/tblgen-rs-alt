@@ -1,1 +1,0 @@
-window.ALL_CRATES = ["paste","proc_macro2","quote","syn","tblgen","thiserror","thiserror_impl","unicode_ident"];
