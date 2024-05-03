@@ -52,7 +52,7 @@ fn run() -> Result<(), Box<dyn Error>> {
                 path.parent().unwrap().display()
             );
             println!(
-                "cargo:rustc-link-lib={}",
+                "cargo:rustc-link-lib=dylib={}",
                 parse_library_name(path.file_name().unwrap().to_str().unwrap())?
             );
         } else {
