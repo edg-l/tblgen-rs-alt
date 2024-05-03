@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["TableGenBitRecTyKind","TableGenBitsRecTyKind","TableGenCodeRecTyKind","TableGenDagRecTyKind","TableGenIntRecTyKind","TableGenInvalidRecTyKind","TableGenListRecTyKind","TableGenRecordRecTyKind","TableGenStringRecTyKind"],"type":["Type"]};
