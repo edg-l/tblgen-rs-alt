@@ -6,12 +6,13 @@ use std::{
     str,
 };
 
-#[cfg(feature = "llvm16-0")]
-const LLVM_MAJOR_VERSION: usize = 16;
-#[cfg(feature = "llvm17-0")]
-const LLVM_MAJOR_VERSION: usize = 17;
-#[cfg(feature = "llvm18-0")]
-const LLVM_MAJOR_VERSION: usize = 18;
+const LLVM_MAJOR_VERSION: usize = if cfg!(feature = "llvm16-0") {
+    16
+} else if cfg!(feature = "llvm17-0") {
+    17
+} else {
+    18
+};
 
 fn main() {
     if let Err(error) = run() {
@@ -57,14 +58,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             );
             println!(
                 "cargo:rustc-link-lib={}",
-                path.file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .split_once('.')
-                    .unwrap()
-                    .0
-                    .trim_start_matches("lib")
+                trim_library_name(path.file_name().unwrap().to_str().unwrap()).unwrap()
             );
         } else {
             println!("cargo:rustc-link-lib={}", flag);
@@ -97,7 +91,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     bindgen::builder()
         .header("wrapper.h")
-        .clang_arg(format!("-I{}", "cc/include"))
+        .clang_arg("-Icc/include")
         .clang_arg(format!("-I{}", llvm_config("--includedir")?))
         .default_enum_style(bindgen::EnumVariation::ModuleConsts)
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
@@ -141,9 +135,6 @@ fn llvm_config(argument: &str) -> Result<String, Box<dyn Error>> {
 }
 
 fn trim_library_name(name: &str) -> Option<&str> {
-    if let Some(name) = name.strip_prefix("lib") {
-        name.strip_suffix(".a")
-    } else {
-        None
-    }
+    name.strip_prefix("lib")
+        .and_then(|name| name.split('.').next())
 }
