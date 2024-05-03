@@ -35,9 +35,6 @@ fn run() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=wrapper.h");
     println!("cargo:rerun-if-changed=cc");
     println!("cargo:rustc-link-search={}", llvm_config("--libdir")?);
-    println!("cargo:rustc-link-lib=static=LLVMCore");
-    println!("cargo:rustc-link-lib=static=LLVMSupport");
-    println!("cargo:rustc-link-lib=static=LLVMTableGen");
 
     for name in llvm_config("--libnames")?.trim().split(' ') {
         println!("cargo:rustc-link-lib={}", parse_library_name(name)?);
