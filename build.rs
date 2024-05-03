@@ -64,8 +64,8 @@ fn run() -> Result<(), Box<dyn Error>> {
         println!("cargo:rustc-link-lib={}", name);
     }
 
-    std::env::set_var("CXXFLAGS", llvm_config("--cxxflags")?);
-    std::env::set_var("CFLAGS", llvm_config("--cflags")?);
+    env::set_var("CXXFLAGS", llvm_config("--cxxflags")?);
+    env::set_var("CFLAGS", llvm_config("--cflags")?);
     println!("cargo:rustc-link-search={}", &env::var("OUT_DIR")?);
 
     cc::Build::new()
