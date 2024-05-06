@@ -24,7 +24,7 @@ jobs:
             repo-name: llvm-repo
             keys-asc: https://apt.llvm.org/llvm-snapshot.gpg.key
     - name: Install LLVM
-      run: sudo apt-get install llvm-18 llvm-18-dev llvm-18-runtime
+      run: sudo apt-get install llvm-18 llvm-18-dev llvm-18-runtime libpolly-18-dev
     - run: cargo test
   test-macos:
     runs-on: macos-14
