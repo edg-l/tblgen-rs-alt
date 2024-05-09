@@ -19,7 +19,8 @@ void tableGenRecordKeeperFree(TableGenRecordKeeperRef rk_ref) {
 
 TableGenRecordKeeperIteratorRef
 tableGenRecordKeeperGetFirstClass(TableGenRecordKeeperRef rk_ref) {
-  auto *it = new RecordMap::const_iterator(unwrap(rk_ref)->getClasses().begin());
+  auto *it =
+      new RecordMap::const_iterator(unwrap(rk_ref)->getClasses().begin());
   if (*it == unwrap(rk_ref)->getClasses().end()) {
     return nullptr;
   }
@@ -95,9 +96,9 @@ TableGenRecordRef tableGenRecordKeeperGetDef(TableGenRecordKeeperRef rk_ref,
 TableGenRecordVectorRef
 tableGenRecordKeeperGetAllDerivedDefinitions(TableGenRecordKeeperRef rk_ref,
                                              TableGenStringRef className) {
-  return wrap(new ctablegen::RecordVector(
-      std::move(unwrap(rk_ref)->getAllDerivedDefinitions(
-          StringRef(className.data, className.len)))));
+  return wrap(
+      new ctablegen::RecordVector(unwrap(rk_ref)->getAllDerivedDefinitions(
+          StringRef(className.data, className.len))));
 }
 
 TableGenRecordRef tableGenRecordVectorGet(TableGenRecordVectorRef vec_ref,
