@@ -100,7 +100,6 @@ fn run() -> Result<(), Box<dyn Error>> {
         .header("wrapper.h")
         .clang_arg(format!("-I{}", "cc/include"))
         .clang_arg(format!("-I{}", llvm_config("--includedir")?))
-        .clang_arg(format!("-L{}", llvm_config("--libdir")?))
         .default_enum_style(bindgen::EnumVariation::ModuleConsts)
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
