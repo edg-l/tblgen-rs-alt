@@ -1,5 +1,11 @@
 # tblgen
 
+[![GitHub Action](https://img.shields.io/github/actions/workflow/status/edg-l/tblgen-rs-alt/test.yaml?branch=master&style=flat-square)](https://github.com/edg-l/tblgen-rs-alt/actions?query=workflow%3Atest)
+[![Crate](https://img.shields.io/crates/v/tblgen-alt.svg?style=flat-square)](https://crates.io/crates/tblgen-alt)
+![Crates.io Total Downloads](https://img.shields.io/crates/d/tblgen-alt)
+![Crates.io License](https://img.shields.io/crates/l/tblgen-alt)
+
+
 This is a updated (LLVM 18) fork of https://gitlab.com/Danacus/tblgen-rs.
 Original author: Daan Vanoverloop.
 
