@@ -12,7 +12,7 @@ documentation = "https://danacus.gitlab.io/tblgen-rs/tblgen/"
 exclude = ["doc/"]
 
 [features]
-default = ["llvm19-0"]
+default = ["llvm18-0"]
 llvm16-0 = []
 llvm17-0 = []
 llvm18-0 = []
