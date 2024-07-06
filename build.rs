@@ -12,6 +12,8 @@ const LLVM_MAJOR_VERSION: usize = 16;
 const LLVM_MAJOR_VERSION: usize = 17;
 #[cfg(feature = "llvm18-0")]
 const LLVM_MAJOR_VERSION: usize = 18;
+#[cfg(feature = "llvm19-0")]
+const LLVM_MAJOR_VERSION: usize = 19;
 
 fn main() {
     if let Err(error) = run() {
