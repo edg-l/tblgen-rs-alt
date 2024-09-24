@@ -62,6 +62,8 @@ fn run() -> Result<(), Box<dyn Error>> {
         }
     }
 
+    println!("cargo:rustc-link-lib=ffi");
+
     if let Some(name) = get_system_libcpp() {
         println!("cargo:rustc-link-lib={}", name);
     }
