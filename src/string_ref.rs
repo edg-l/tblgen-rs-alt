@@ -37,7 +37,7 @@ impl<'a> From<&'a str> for StringRef<'a> {
     fn from(value: &'a str) -> Self {
         unsafe {
             StringRef::from_raw(TableGenStringRef {
-                data: value.as_ptr() as *const i8,
+                data: value.as_ptr() as *const _,
                 len: value.len(),
             })
         }
@@ -54,6 +54,6 @@ impl<'a> TryFrom<StringRef<'a>> for &'a str {
 
 impl<'a> From<StringRef<'a>> for &'a [u8] {
     fn from(value: StringRef<'a>) -> Self {
-        unsafe { std::slice::from_raw_parts(value.raw.data as *const u8, value.raw.len) }
+        unsafe { std::slice::from_raw_parts(value.raw.data as *const _, value.raw.len) }
     }
 }

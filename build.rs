@@ -91,8 +91,9 @@ fn run() -> Result<(), Box<dyn Error>> {
         .cpp(true)
         .include("cc/include")
         .include(llvm_config("--includedir")?)
-        // .flag("-MJcompile_commands.o.json")
-        .opt_level(3)
+        .flag(&llvm_config("--cxxflags")?)
+        .flag("-Wno-unused-parameter")
+        .std("c++17")
         .compile("CTableGen");
 
     println!("cargo:rustc-link-lib=static=CTableGen");

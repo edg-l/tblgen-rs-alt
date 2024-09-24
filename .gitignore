@@ -3,3 +3,4 @@
 /target
 compile_commands.json
 doc
+.clangd
