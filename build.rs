@@ -101,7 +101,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     bindgen::builder()
         .header("wrapper.h")
-        .clang_arg(format!("-I{}", "cc/include"))
+        .clang_arg("-Icc/include")
         .clang_arg(format!("-I{}", llvm_config("--includedir")?))
         .default_enum_style(bindgen::EnumVariation::ModuleConsts)
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
