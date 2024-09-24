@@ -37,9 +37,14 @@ fn run() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=wrapper.h");
     println!("cargo:rerun-if-changed=cc");
     println!("cargo:rustc-link-search={}", llvm_config("--libdir")?);
+    println!("cargo:rustc-link-lib=static=LLVMCore");
+    println!("cargo:rustc-link-lib=static=LLVMSupport");
+    println!("cargo:rustc-link-lib=static=LLVMTableGen");
 
     for name in llvm_config("--libnames")?.trim().split(' ') {
-        println!("cargo:rustc-link-lib={}", parse_library_name(name)?);
+        if let Some(name) = trim_library_name(name) {
+            println!("cargo:rustc-link-lib={}", name);
+        }
     }
 
     for flag in llvm_config("--system-libs")?.trim().split(' ') {
@@ -55,7 +60,14 @@ fn run() -> Result<(), Box<dyn Error>> {
             );
             println!(
                 "cargo:rustc-link-lib={}",
-                parse_library_name(path.file_name().unwrap().to_str().unwrap())?
+                path.file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .split_once('.')
+                    .unwrap()
+                    .0
+                    .trim_start_matches("lib")
             );
         } else {
             println!("cargo:rustc-link-lib={}", flag);
@@ -132,8 +144,10 @@ fn llvm_config(argument: &str) -> Result<String, Box<dyn Error>> {
     .to_string())
 }
 
-fn parse_library_name(name: &str) -> Result<&str, String> {
-    name.strip_prefix("lib")
-        .and_then(|name| name.split('.').next())
-        .ok_or_else(|| format!("failed to parse library name: {}", name))
+fn trim_library_name(name: &str) -> Option<&str> {
+    if let Some(name) = name.strip_prefix("lib") {
+        name.strip_suffix(".a")
+    } else {
+        None
+    }
 }
