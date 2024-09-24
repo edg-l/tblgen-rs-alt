@@ -6,14 +6,15 @@ use std::{
     str,
 };
 
-#[cfg(feature = "llvm16-0")]
-const LLVM_MAJOR_VERSION: usize = 16;
-#[cfg(feature = "llvm17-0")]
-const LLVM_MAJOR_VERSION: usize = 17;
-#[cfg(feature = "llvm18-0")]
-const LLVM_MAJOR_VERSION: usize = 18;
-#[cfg(feature = "llvm19-0")]
-const LLVM_MAJOR_VERSION: usize = 19;
+const LLVM_MAJOR_VERSION: usize = if cfg!(feature = "llvm16-0") {
+    16
+} else if cfg!(feature = "llvm17-0") {
+    17
+} else if cfg!(feature = "llvm18-0") {
+    18
+} else {
+    19
+};
 
 fn main() {
     if let Err(error) = run() {
