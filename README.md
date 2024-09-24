@@ -5,8 +5,7 @@
 ![Crates.io Total Downloads](https://img.shields.io/crates/d/tblgen-alt)
 ![Crates.io License](https://img.shields.io/crates/l/tblgen-alt)
 
-
-This is a updated (LLVM 18) fork of https://gitlab.com/Danacus/tblgen-rs.
+This is a updated (LLVM 19) fork of https://gitlab.com/Danacus/tblgen-rs.
 Original author: Daan Vanoverloop.
 
 This crate provides raw bindings and a safe wrapper for TableGen, a domain-specific language used by the LLVM project.
